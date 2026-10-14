@@ -8,16 +8,16 @@ const taskRoutes = require('./routes/taskRoutes');
 
 const app = express();
 
-// মিডলওয়্যার
+// Allowed Origins for Localhost and Vercel
 const allowedOrigins = [
   'http://localhost:3000',
   'https://client-five-murex.vercel.app'
 ];
 
+// CORS Middleware (Handles regular requests and OPTIONS preflights automatically)
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests with no origin (e.g. mobile apps or curl) or if origin is in the allowed list
       if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
         callback(null, true);
       } else {
@@ -30,12 +30,9 @@ app.use(
   })
 );
 
-// Explicitly handle preflight requests across all endpoints
-app.options('*', cors());
-
 app.use(express.json());
 
-// ডাটাবেস কানেকশন
+// Database Connection
 connectDB();
 
 // API Routes
@@ -43,7 +40,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/ai', aiAndStatsRoutes);
 
-// টেস্ট রাউট
+// Health Check Route
 app.get('/api/health', (req, res) => {
   res.json({ status: 'active', message: '🌱 Empathetic Task Manager Server is running smoothly!' });
 });
