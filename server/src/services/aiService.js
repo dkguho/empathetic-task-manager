@@ -1,0 +1,122 @@
+// AI-কে প্রম্পট পাঠানোর এবং JSON উত্তর পাওয়ার মূল ফাংশন
+const callAI = async (systemPrompt, userPrompt) => {
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash', // চাইলে যেকোনো ফাস্ট মডেল দিতে পারো
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ]
+      })
+    });
+
+    const data = await response.json();
+    const content = data.choices[0].message.content;
+    return JSON.parse(content);
+  } catch (error) {
+    console.error('AI Service Error:', error.message);
+    return null; // AI কাজ না করলে নিচে আমরা নিরাপদ Fallback রেখেছি
+  }
+};
+
+// ১. স্মার্ট ইনপুট ও রাতের ব্রেইন ডাম্প থেকে কাজ বের করা
+exports.parseSmartInputOrBrainDump = async (rawText) => {
+  const systemPrompt = `
+তুমি একটি এম্প্যাথেটিক টাস্ক ম্যানেজার এআই। ইউজার সাধারণ ভাষায় তার প্ল্যান বা রাতের এলোমেলো চিন্তা (Brain Dump) লিখবে। 
+সেখান থেকে কাজগুলো আলাদা করে নিচের JSON ফরম্যাটে রিটার্ন করো:
+{
+  "tasks": [
+    {
+      "title": "কাজের নাম (বাংলায় বা ইউজারের ভাষায়)",
+      "timeBlock": "morning" | "afternoon" | "evening" | "night" | "anytime",
+      "exactTime": "HH:MM" বা null,
+      "category": "work" | "study" | "health" | "chores" | "entertainment" | "warmup",
+      "priorityColor": "red" (জরুরি) | "blue" (সাধারণ) | "green" (ওয়ার্ম-আপ) | "purple" (বিনোদন/শখ),
+      "estimatedMinutes": সংখ্যা (যেমন 2, 15, 60),
+      "isDopamineStarter": true/false (খুব ছোট সহজ কাজ হলে true),
+      "isGuiltFreeHobby": true/false (গান শোনা, মুভি দেখা বা শখের কাজ হলে true),
+      "isBareMinimum": true/false (সবচেয়ে জরুরি কাজ যা না করলেই নয়)
+    }
+  ],
+  "empatheticMessage": "ইউজারকে উৎসাহ দিয়ে ১ লাইনের একটি সুন্দর বাংলা মেসেজ"
+}`;
+
+  const result = await callAI(systemPrompt, rawText);
+
+  // যদি API Key না থাকে বা ইন্টারনেটে সমস্যা হয়, তবে নিজে থেকেই একটি বেসিক টাস্ক বানিয়ে দেবে
+  if (!result || !result.tasks) {
+    return {
+      tasks: [{
+        title: rawText,
+        timeBlock: 'anytime',
+        exactTime: null,
+        category: 'work',
+        priorityColor: 'blue',
+        estimatedMinutes: 15,
+        isDopamineStarter: false,
+        isGuiltFreeHobby: false,
+        isBareMinimum: true
+      }],
+      empatheticMessage: 'তোমার কাজটি লিস্টে যোগ করে নিয়েছি! ধীরেসুস্থে শুরু করো। 🌱'
+    };
+  }
+
+  return result;
+};
+
+// ২. বড় কাজকে ৩-৪টি ছোট ও সহজ ধাপে ভেঙে দেওয়া (Task Breakdown)
+exports.generateSubtasks = async (taskTitle) => {
+  const systemPrompt = `
+ইউজার একটি বড় বা কঠিন কাজের নাম দেবে। যাতে তার ভয় না লাগে, সেজন্য কাজটিকে ৩ থেকে ৪টি খুব ছোট এবং সহজ ধাপে ভেঙে দাও (প্রথম ধাপটি যেন ২ মিনিটে শুরু করার মতো সহজ হয়)।
+JSON ফরম্যাট:
+{
+  "subTasks": [
+    { "title": "ধাপ ১..." },
+    { "title": "ধাপ ২..." },
+    { "title": "ধাপ ৩..." }
+  ],
+  "motivationalTip": "কাজটি শুরু করার জন্য ছোট ১ লাইনের উৎসাহ"
+}`;
+
+  const result = await callAI(systemPrompt, `কাজের নাম: ${taskTitle}`);
+  if (!result || !result.subTasks) {
+    return {
+      subTasks: [
+        { title: 'কাজের জায়গাটি গুছিয়ে বসো এবং ১ গ্লাস জল খাও' },
+        { title: `${taskTitle}-এর প্রথম ছোট অংশটি মাত্র ৫ মিনিটের জন্য শুরু করো` },
+        { title: 'বাকি অংশটুকু শেষ করে রিভিউ দাও' }
+      ],
+      motivationalTip: 'পুরো কাজটা একবারে ভাবতে হবে না, শুধু প্রথম ধাপটা শুরু করো! 💪'
+    };
+  }
+  return result;
+};
+
+// ৩. এআই হ্যাবিট ট্র্যাকিং (সপ্তাহের ডেটা দেখে অলসতার প্যাটার্ন বের করা)
+exports.analyzeWeeklyHabits = async (summaryData) => {
+  const systemPrompt = `
+তুমি একজন বন্ধুসুলভ হ্যাবিট কোচ। ইউজারের গত ৭ দিনের কাজের ডেটা দেখে কোনো বকা না দিয়ে খুব পজিটিভভাবে তাকে জানাও সে কোন সময়ের বা কোন ক্যাটাগরির কাজ বেশি পেছাচ্ছে এবং কীভাবে সেটি ঠিক করা যায়।
+JSON ফরম্যাট:
+{
+  "mainInsight": "যেমন: তুমি বিকেলের পড়াশোনার কাজগুলো বেশি পেছাচ্ছ...",
+  "actionableSuggestion": "১টি খুব সহজ পরামর্শ (যেমন: বিকেলে বড় কাজের আগে ১টি ওয়ার্ম-আপ টাস্ক রাখো)",
+  "cheerleaderNote": "সপ্তাহের ভালো দিকগুলো নিয়ে উৎসাহমূলক মেসেজ"
+}`;
+
+  const result = await callAI(systemPrompt, JSON.stringify(summaryData));
+  if (!result) {
+    return {
+      mainInsight: 'তুমি এই সপ্তাহে বেশ কিছু কাজ চেষ্টা করেছ, তবে কিছু কাজ বারবার পেছানো হয়েছে।',
+      actionableSuggestion: 'যে কাজগুলো কঠিন লাগছে সেগুলোকে AI Breakdown দিয়ে ছোট ভাগে ভেঙে নাও।',
+      cheerleaderNote: 'নিজের কাজের হিসাব রাখাটাই সবচেয়ে বড় জয়! পরের সপ্তাহ আরও ভালো যাবে। 🌟'
+    };
+  }
+  return result;
+};
