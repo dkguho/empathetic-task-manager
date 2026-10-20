@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import Link from 'next/link';
@@ -7,18 +7,20 @@ import {
   Sparkles, Brain, BatteryWarning, BatteryCharging, BatteryFull,
   Clock, CheckCircle2, Bot, Play, Pause, RotateCcw,
   Plus, Sun, CloudSun, Moon, Infinity as AnyTimeIcon, BarChart3, Zap,
-  Droplets, Heart, Fish, Trees, Cat
+  Droplets, Heart, Fish, Trash2, Bell, BellRing, Volume2
 } from 'lucide-react';
 import { useTaskStore } from '@/store/useTaskStore';
+import { useAuthStore } from '@/store/useAuthStore';
 import SpiritCompanion3D from '@/components/companion/SpiritCompanion3D';
 
 export default function EmpatheticDashboard() {
+  const { user, initAuth } = useAuthStore();
   const {
     awarenessPoints, lifelines, energyLevel, sickMode, companion,
-    tasks, doneList, brainDumpHistory, twoMinutePopupTask, delayReasonModalTask,
+    tasks, doneList, twoMinutePopupTask, delayReasonModalTask,
     setEnergyLevel, toggleSickMode, setCompanionViewMode, nurtureCompanion,
     clearCompanionEffect, addSmartTask, processBrainDumpToTasks, completeTask,
-    snoozeTask15Min, triggerReschedule, submitDelayReason, breakdownTaskWithAI,
+    deleteTask, snoozeTask15Min, triggerReschedule, submitDelayReason, breakdownTaskWithAI,
     toggleSubTask, closeModals
   } = useTaskStore();
 
@@ -26,26 +28,123 @@ export default function EmpatheticDashboard() {
   const [smartInput, setSmartInput] = useState('');
   const [selectedTimeOfDay, setSelectedTimeOfDay] = useState('auto');
   const [exactTimeInput, setExactTimeInput] = useState('');
+  const [selectedDateInput, setSelectedDateInput] = useState('');
   const [selectedPriority, setSelectedPriority] = useState('blue');
   const [brainDumpText, setBrainDumpText] = useState('');
   const [delayReasonText, setDelayReasonText] = useState('');
   const [useLifelineCheck, setUseLifelineCheck] = useState(false);
+
+  // Notification & Alarm States
+  const [notifPermission, setNotifPermission] = useState('default');
+  const [activeAlarmTask, setActiveAlarmTask] = useState(null);
+  const triggeredAlarmsRef = useRef(new Set());
 
   const totalTime = 25 * 60;
   const [timeLeft, setTimeLeft] = useState(totalTime);
   const [isRunning, setIsRunning] = useState(false);
   const circumference = 2 * Math.PI * 80;
 
+  // 1. Load user profile & check notification permission on startup
+  useEffect(() => {
+    if (initAuth) initAuth();
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setNotifPermission(Notification.permission);
+    }
+  }, [initAuth]);
+
+  // 2. Built-in Gentle Chime Sound Generator (Web Audio API - No MP3 file needed)
+  const playAlarmSound = () => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      const ctx = new AudioCtx();
+      const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6 pleasant chord
+
+      notes.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.18);
+
+        gain.gain.setValueAtTime(0.2, ctx.currentTime + idx * 0.18);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.18 + 0.6);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(ctx.currentTime + idx * 0.18);
+        osc.stop(ctx.currentTime + idx * 0.18 + 0.6);
+      });
+    } catch (e) {
+      console.error('Audio playback blocked until user interacts with page:', e);
+    }
+  };
+
+  // 3. Request Browser Notification Permission
+  const requestNotificationAccess = async () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      alert('Your browser does not support desktop notifications.');
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    setNotifPermission(permission);
+    if (permission === 'granted') {
+      playAlarmSound();
+      new Notification('🌱 Empathetic Space Ready!', {
+        body: 'Alarms and gentle task reminders are now active!'
+      });
+    }
+  };
+
+  // 4. Real-Time Task Alarm Checker (Checks every 10 seconds)
+  useEffect(() => {
+    const checkTaskAlarms = () => {
+      const now = new Date();
+      const currentHours = String(now.getHours()).padStart(2, '0');
+      const currentMinutes = String(now.getMinutes()).padStart(2, '0');
+      const currentTimeStr = `${currentHours}:${currentMinutes}`;
+      const todayStr = now.toISOString().split('T')[0];
+
+      tasks.forEach((task) => {
+        if (!task.exactTime) return;
+        const dateMatches = !task.date || task.date === todayStr;
+        const alarmKey = `${task._id}-${task.date || todayStr}-${task.exactTime}`;
+
+        if (dateMatches && task.exactTime === currentTimeStr && !triggeredAlarmsRef.current.has(alarmKey)) {
+          triggeredAlarmsRef.current.add(alarmKey);
+          setActiveAlarmTask(task);
+          playAlarmSound();
+
+          if (notifPermission === 'granted') {
+            new Notification(`⏰ Time for: ${task.title}`, {
+              body: task.aiMotivationalNote || 'Take a gentle breath and start when ready! 🌱'
+            });
+          }
+        }
+      });
+    };
+
+    const alarmInterval = setInterval(checkTaskAlarms, 10000);
+    checkTaskAlarms();
+    return () => clearInterval(alarmInterval);
+  }, [tasks, notifPermission]);
+
+  // 5. Focus Mode Countdown Timer + Alarm
   useEffect(() => {
     let interval = null;
     if (isRunning && timeLeft > 0) {
       interval = setInterval(() => setTimeLeft((t) => t - 1), 1000);
     } else if (timeLeft === 0) {
       setIsRunning(false);
+      playAlarmSound();
       firePremiumConfetti();
+      if (notifPermission === 'granted') {
+        new Notification('🎉 Focus Session Complete!', {
+          body: 'Awesome job! Take a short break and hydrate.'
+        });
+      }
     }
     return () => clearInterval(interval);
-  }, [isRunning, timeLeft]);
+  }, [isRunning, timeLeft, notifPermission]);
 
   const firePremiumConfetti = () => {
     confetti({
@@ -64,7 +163,16 @@ export default function EmpatheticDashboard() {
   const handleComplete = (id) => {
     firePremiumConfetti();
     completeTask(id);
+    if (activeAlarmTask && activeAlarmTask._id === id) {
+      setActiveAlarmTask(null);
+    }
     setTimeout(() => clearCompanionEffect(), 2500);
+  };
+
+  const handleDelete = (id) => {
+    if (deleteTask) {
+      deleteTask(id);
+    }
   };
 
   const handleAddTask = (e) => {
@@ -73,11 +181,13 @@ export default function EmpatheticDashboard() {
     addSmartTask(smartInput, {
       manualTimeBlock: selectedTimeOfDay,
       manualExactTime: exactTimeInput,
+      manualDate: selectedDateInput,
       manualPriority: selectedPriority,
       isBrainDump: false
     });
     setSmartInput('');
     setExactTimeInput('');
+    setSelectedDateInput('');
   };
 
   const handleBrainDumpSubmit = () => {
@@ -127,7 +237,7 @@ export default function EmpatheticDashboard() {
       <div className="mesh-bg" />
 
       <div className="max-w-[1500px] mx-auto px-4 sm:px-8 pt-6 space-y-6">
-        {/* ১. Header & Energy Check-in */}
+        {/* 1. Header & Energy Check-in */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -135,7 +245,7 @@ export default function EmpatheticDashboard() {
         >
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-[#1e1e2d] mb-1">
-              Good afternoon, Kushal! ✨
+              Welcome, {user?.name || 'Friend'}! ✨
             </h1>
             <p className="text-[#646477] font-medium text-sm sm:text-base">
               {energyLevel === 'low'
@@ -145,6 +255,29 @@ export default function EmpatheticDashboard() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            {/* Alarm & Notification Permission Button */}
+            <button
+              onClick={requestNotificationAccess}
+              className={`px-4 py-2 rounded-full text-xs font-bold flex items-center gap-1.5 border transition-all shadow-sm ${
+                notifPermission === 'granted'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                  : 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100'
+              }`}
+              title="Click to enable sound & desktop notifications"
+            >
+              {notifPermission === 'granted' ? (
+                <>
+                  <BellRing className="w-4 h-4 text-emerald-600" />
+                  <span>Alarms Active 🔔</span>
+                </>
+              ) : (
+                <>
+                  <Bell className="w-4 h-4 text-amber-600 animate-bounce" />
+                  <span>Enable Alarms & Alerts</span>
+                </>
+              )}
+            </button>
+
             <div className="flex items-center gap-2 bg-white/60 p-1.5 rounded-full border border-white shadow-sm">
               <span className="pl-3 pr-1 text-xs font-bold text-[#646477]">Energy:</span>
               <button
@@ -177,7 +310,7 @@ export default function EmpatheticDashboard() {
           </div>
         </motion.div>
 
-        {/* ২. Main Navigation Tabs */}
+        {/* 2. Main Navigation Tabs */}
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="inline-flex bg-white/60 p-1.5 rounded-full border border-white shadow-sm">
             <button
@@ -217,7 +350,7 @@ export default function EmpatheticDashboard() {
           </div>
         </div>
 
-        {/* ৩. Main Bento Grid */}
+        {/* 3. Main Bento Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left Column (8 cols) */}
           <div className="lg:col-span-8 space-y-6">
@@ -230,7 +363,7 @@ export default function EmpatheticDashboard() {
                   exit={{ opacity: 0, y: -15 }}
                   className="space-y-6"
                 >
-                  {/* Smart Input + Time & Priority Picker */}
+                  {/* Smart Input + Date, Time & Priority Picker */}
                   <div className="bento-box p-5 sm:p-6 space-y-4">
                     <form
                       onSubmit={handleAddTask}
@@ -256,7 +389,26 @@ export default function EmpatheticDashboard() {
 
                     <div className="flex flex-wrap items-center justify-between gap-4 pt-1 px-2 text-xs">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="font-bold text-[#646477] mr-1">⏰ Time:</span>
+                        <span className="font-bold text-[#646477] mr-1">⏰ When:</span>
+                        
+                        {/* Date Picker */}
+                        <input
+                          type="date"
+                          value={selectedDateInput}
+                          onChange={(e) => setSelectedDateInput(e.target.value)}
+                          className="px-2.5 py-1.5 rounded-full bg-white/80 border border-purple-200 text-[#1e1e2d] font-semibold outline-none focus:ring-2 focus:ring-purple-300"
+                          title="Choose Task Date"
+                        />
+
+                        {/* Exact Time Picker */}
+                        <input
+                          type="time"
+                          value={exactTimeInput}
+                          onChange={(e) => setExactTimeInput(e.target.value)}
+                          className="px-2.5 py-1.5 rounded-full bg-white/80 border border-purple-200 text-[#1e1e2d] font-semibold outline-none focus:ring-2 focus:ring-purple-300"
+                          title="Set Alarm Time"
+                        />
+
                         {[
                           { id: 'auto', label: '✨ Auto AI' },
                           { id: 'morning', label: '🌅 Morning' },
@@ -277,12 +429,6 @@ export default function EmpatheticDashboard() {
                             {t.label}
                           </button>
                         ))}
-                        <input
-                          type="time"
-                          value={exactTimeInput}
-                          onChange={(e) => setExactTimeInput(e.target.value)}
-                          className="ml-1 px-2.5 py-1 rounded-full bg-white/80 border border-purple-200 text-[#1e1e2d] font-semibold outline-none"
-                        />
                       </div>
 
                       <div className="flex flex-wrap items-center gap-1.5">
@@ -353,6 +499,11 @@ export default function EmpatheticDashboard() {
                                     <div className="flex flex-wrap items-center gap-2 mb-1">
                                       <p className="font-bold text-base text-[#1e1e2d] m-0">{task.title}</p>
                                       {renderPriorityBadge(task)}
+                                      {task.date && (
+                                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-100 text-sky-700">
+                                          📅 {task.date}
+                                        </span>
+                                      )}
                                       {task.exactTime && (
                                         <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-700">
                                           ⏰ {task.exactTime}
@@ -385,6 +536,13 @@ export default function EmpatheticDashboard() {
                                       className="px-3 py-1.5 rounded-full bg-white/80 hover:bg-white border border-white text-xs font-bold text-[#646477] hover:text-[#1e1e2d] shadow-sm transition-all"
                                     >
                                       Delay ({3 - task.rescheduleCount})
+                                    </button>
+                                    <button
+                                      onClick={() => handleDelete(task._id)}
+                                      title="Delete Task"
+                                      className="w-9 h-9 rounded-full bg-rose-50 hover:bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-500 hover:text-rose-700 shadow-sm transition-all"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
                                     </button>
                                   </div>
                                 </div>
@@ -480,7 +638,6 @@ export default function EmpatheticDashboard() {
           {/* Right Column (4 cols): 3D Living Tree & Cat Sanctuary + Care System */}
           <div className="lg:col-span-4 space-y-6">
             <div className="bento-box p-5 sm:p-6 space-y-4">
-              {/* Top Header & Mode Switcher (Both / Tree / Cat) */}
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <h4 className="text-base font-extrabold text-[#1e1e2d] m-0">
@@ -512,10 +669,8 @@ export default function EmpatheticDashboard() {
                 </div>
               </div>
 
-              {/* Realistic 3D Tree & Cat Canvas */}
               <SpiritCompanion3D companion={companion} />
 
-              {/* Emotional Status Dialogue */}
               <motion.div
                 key={companion.message}
                 initial={{ opacity: 0, y: 5 }}
@@ -525,7 +680,6 @@ export default function EmpatheticDashboard() {
                 {companion.message}
               </motion.div>
 
-              {/* Live Vitality Meters (Tree Hydration & Cat Fullness/Love) */}
               <div className="grid grid-cols-2 gap-2.5 pt-1 text-[11px] font-bold">
                 <div className="bg-white/60 rounded-2xl p-2.5 border border-white">
                   <div className="flex justify-between text-sky-700 mb-1">
@@ -554,7 +708,6 @@ export default function EmpatheticDashboard() {
                 </div>
               </div>
 
-              {/* 4 Interactive Care Buttons (Spend Earned Points) */}
               <div className="grid grid-cols-2 gap-2.5">
                 <button
                   onClick={() => handleNurture('water')}
@@ -586,7 +739,6 @@ export default function EmpatheticDashboard() {
                 </button>
               </div>
 
-              {/* Sick Mode Pause Button */}
               <button
                 onClick={toggleSickMode}
                 className={`w-full py-2.5 px-4 rounded-full font-bold text-xs flex items-center justify-center gap-2 border transition-all ${
@@ -602,10 +754,19 @@ export default function EmpatheticDashboard() {
 
             {/* Focus Mode Timer */}
             <div className="bento-box p-6 text-center">
-              <h5 className="text-base font-extrabold text-[#1e1e2d] text-left mb-4 flex items-center gap-2">
-                <Clock className="w-5 h-5 text-[#a18cd1]" />
-                <span>Focus Mode</span>
-              </h5>
+              <div className="flex items-center justify-between mb-4">
+                <h5 className="text-base font-extrabold text-[#1e1e2d] flex items-center gap-2 m-0">
+                  <Clock className="w-5 h-5 text-[#a18cd1]" />
+                  <span>Focus Mode</span>
+                </h5>
+                <button
+                  onClick={playAlarmSound}
+                  className="text-xs font-bold text-purple-600 hover:text-purple-800 flex items-center gap-1"
+                  title="Test Alarm Sound"
+                >
+                  <Volume2 className="w-4 h-4" /> Test Sound
+                </button>
+              </div>
 
               <div className="relative w-[170px] h-[170px] mx-auto mb-4 flex items-center justify-center">
                 <svg className="-rotate-90 w-full h-full" viewBox="0 0 180 180">
@@ -656,7 +817,55 @@ export default function EmpatheticDashboard() {
         </div>
       </div>
 
-      {/* 2-Minute Rule & Delay Reason Modals */}
+      {/* Live Task Alarm Modal */}
+      <AnimatePresence>
+        {activeAlarmTask && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="bento-box bg-white max-w-md w-full p-6 text-center space-y-4 border-2 border-purple-300 shadow-2xl"
+            >
+              <div className="w-14 h-14 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto animate-bounce">
+                <BellRing className="w-7 h-7" />
+              </div>
+              <span className="px-3 py-1 rounded-full text-[11px] font-extrabold uppercase bg-purple-100 text-purple-700">
+                ⏰ Scheduled Reminder ({activeAlarmTask.exactTime})
+              </span>
+              <h3 className="text-xl font-extrabold text-[#1e1e2d] m-0">
+                {activeAlarmTask.title}
+              </h3>
+              <p className="text-xs text-[#646477]">
+                {activeAlarmTask.aiMotivationalNote || 'Ready to give this a gentle try?'}
+              </p>
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => {
+                    snoozeTask15Min(activeAlarmTask._id);
+                    setActiveAlarmTask(null);
+                  }}
+                  className="btn-glass-pill flex-1 py-2.5 text-xs font-bold"
+                >
+                  Snooze +15m 💤
+                </button>
+                <button
+                  onClick={() => handleComplete(activeAlarmTask._id)}
+                  className="btn-premium flex-1 py-2.5 text-xs justify-center"
+                >
+                  Complete Now! 🎉
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 2-Minute Rule Modal */}
       <AnimatePresence>
         {twoMinutePopupTask && (
           <motion.div
@@ -689,6 +898,7 @@ export default function EmpatheticDashboard() {
         )}
       </AnimatePresence>
 
+      {/* Delay Reason Modal */}
       <AnimatePresence>
         {delayReasonModalTask && (
           <motion.div

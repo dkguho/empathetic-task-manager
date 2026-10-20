@@ -16,6 +16,7 @@ const initialDemoTasks = [
   {
     _id: 't1',
     title: 'Drink a big glass of water 💧',
+    date: null,
     timeBlock: 'morning',
     exactTime: null,
     category: 'warmup',
@@ -33,6 +34,7 @@ const initialDemoTasks = [
   {
     _id: 't2',
     title: 'Finish Science Project Outline 💻',
+    date: null,
     timeBlock: 'morning',
     exactTime: '10:30',
     category: 'study',
@@ -50,6 +52,7 @@ const initialDemoTasks = [
   {
     _id: 't3',
     title: 'Play Video Games for 1 Hour 🎮',
+    date: null,
     timeBlock: 'afternoon',
     exactTime: null,
     category: 'entertainment',
@@ -203,6 +206,7 @@ export const useTaskStore = create(
         const {
           manualTimeBlock = 'auto',
           manualExactTime = '',
+          manualDate = '',
           manualPriority = 'blue',
           isBrainDump = false
         } = options;
@@ -233,6 +237,7 @@ export const useTaskStore = create(
         const newTask = {
           _id: 't_' + Date.now() + Math.random().toString(36).slice(2, 6),
           title: rawText,
+          date: manualDate || new Date().toISOString().split('T')[0], // Sets to today if left empty
           timeBlock: resolvedTimeBlock,
           exactTime: manualExactTime || null,
           category:
@@ -280,6 +285,11 @@ export const useTaskStore = create(
           .map((s) => s.trim())
           .filter((s) => s.length > 2);
 
+        // Schedule brain dump items for tomorrow
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
         const created = lines.map((line) => {
           const lower = line.toLowerCase();
           const timeBlock =
@@ -301,6 +311,7 @@ export const useTaskStore = create(
           return {
             _id: 'bd_' + Date.now() + Math.random().toString(36).slice(2, 6),
             title: line,
+            date: tomorrowStr,
             timeBlock,
             exactTime: null,
             category: 'work',
@@ -353,6 +364,22 @@ export const useTaskStore = create(
         try {
           await apiClient.patch(`/tasks/${taskId}/complete`);
         } catch (e) {}
+      },
+
+      deleteTask: async (taskId) => {
+        set((state) => ({
+          tasks: state.tasks.filter((t) => t._id !== taskId),
+          companion: {
+            ...state.companion,
+            message: 'Task removed. Keeping your sanctuary clean and tidy! 🧹'
+          }
+        }));
+
+        try {
+          await apiClient.delete(`/tasks/${taskId}`);
+        } catch (e) {
+          console.error('Failed to sync deletion with backend:', e);
+        }
       },
 
       snoozeTask15Min: async (taskId) => {
