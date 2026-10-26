@@ -5,10 +5,12 @@ const callAI = async (systemPrompt, userPrompt) => {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://empathetic-task-manager.vercel.app', // OpenRouter usually expects this
+        'X-Title': 'Empathetic Task Manager'
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash', // চাইলে যেকোনো ফাস্ট মডেল দিতে পারো
+        model: 'google/gemini-2.5-flash',
         response_format: { type: 'json_object' },
         messages: [
           { role: 'system', content: systemPrompt },
@@ -17,8 +19,16 @@ const callAI = async (systemPrompt, userPrompt) => {
       })
     });
 
+    if (!response.ok) {
+      throw new Error(`OpenRouter API responded with status ${response.status}`);
+    }
+
     const data = await response.json();
-    const content = data.choices[0].message.content;
+    let content = data.choices[0].message.content;
+    
+    // Clean up any Markdown markdown blocks if the AI accidentally includes them
+    content = content.replace(/```json/gi, '').replace(/```/g, '').trim();
+
     return JSON.parse(content);
   } catch (error) {
     console.error('AI Service Error:', error.message);
@@ -35,7 +45,7 @@ exports.parseSmartInputOrBrainDump = async (rawText) => {
   "tasks": [
     {
       "title": "কাজের নাম (বাংলায় বা ইউজারের ভাষায়)",
-      "timeBlock": "morning" | "afternoon" | "evening" | "night" | "anytime",
+      "timeBlock": "morning" | "afternoon" | "night" | "anytime",
       "exactTime": "HH:MM" বা null,
       "category": "work" | "study" | "health" | "chores" | "entertainment" | "warmup",
       "priorityColor": "red" (জরুরি) | "blue" (সাধারণ) | "green" (ওয়ার্ম-আপ) | "purple" (বিনোদন/শখ),
@@ -46,7 +56,8 @@ exports.parseSmartInputOrBrainDump = async (rawText) => {
     }
   ],
   "empatheticMessage": "ইউজারকে উৎসাহ দিয়ে ১ লাইনের একটি সুন্দর বাংলা মেসেজ"
-}`;
+}
+গুরুত্বপূর্ণ নির্দেশ: শুধুমাত্র বৈধ JSON রিটার্ন করবে, অন্য কোনো টেক্সট বা মার্কডাউন নয়।`;
 
   const result = await callAI(systemPrompt, rawText);
 
@@ -83,19 +94,22 @@ JSON ফরম্যাট:
     { "title": "ধাপ ৩..." }
   ],
   "motivationalTip": "কাজটি শুরু করার জন্য ছোট ১ লাইনের উৎসাহ"
-}`;
+}
+গুরুত্বপূর্ণ নির্দেশ: শুধুমাত্র বৈধ JSON রিটার্ন করবে।`;
 
   const result = await callAI(systemPrompt, `কাজের নাম: ${taskTitle}`);
+  
   if (!result || !result.subTasks) {
     return {
       subTasks: [
         { title: 'কাজের জায়গাটি গুছিয়ে বসো এবং ১ গ্লাস জল খাও' },
-        { title: `${taskTitle}-এর প্রথম ছোট অংশটি মাত্র ৫ মিনিটের জন্য শুরু করো` },
-        { title: 'বাকি অংশটুকু শেষ করে রিভিউ দাও' }
+        { title: `"${taskTitle}"-এর প্রথম ছোট অংশটি মাত্র ৫ মিনিটের জন্য শুরু করো` },
+        { title: 'বাকি অংশটুকু শেষ করে নিজেকে বাহবা দাও!' }
       ],
       motivationalTip: 'পুরো কাজটা একবারে ভাবতে হবে না, শুধু প্রথম ধাপটা শুরু করো! 💪'
     };
   }
+  
   return result;
 };
 
@@ -108,9 +122,11 @@ JSON ফরম্যাট:
   "mainInsight": "যেমন: তুমি বিকেলের পড়াশোনার কাজগুলো বেশি পেছাচ্ছ...",
   "actionableSuggestion": "১টি খুব সহজ পরামর্শ (যেমন: বিকেলে বড় কাজের আগে ১টি ওয়ার্ম-আপ টাস্ক রাখো)",
   "cheerleaderNote": "সপ্তাহের ভালো দিকগুলো নিয়ে উৎসাহমূলক মেসেজ"
-}`;
+}
+গুরুত্বপূর্ণ নির্দেশ: শুধুমাত্র বৈধ JSON রিটার্ন করবে।`;
 
   const result = await callAI(systemPrompt, JSON.stringify(summaryData));
+  
   if (!result) {
     return {
       mainInsight: 'তুমি এই সপ্তাহে বেশ কিছু কাজ চেষ্টা করেছ, তবে কিছু কাজ বারবার পেছানো হয়েছে।',
@@ -118,5 +134,6 @@ JSON ফরম্যাট:
       cheerleaderNote: 'নিজের কাজের হিসাব রাখাটাই সবচেয়ে বড় জয়! পরের সপ্তাহ আরও ভালো যাবে। 🌟'
     };
   }
+  
   return result;
 };

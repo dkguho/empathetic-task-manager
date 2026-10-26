@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { get, set, del } from 'idb-keyval';
+import { get, set as idbSet, del } from 'idb-keyval';
 import { apiClient } from '@/lib/apiClient';
 
 const idbStorage = {
@@ -8,8 +8,21 @@ const idbStorage = {
     const value = await get(name);
     return value !== undefined ? value : null;
   },
-  setItem: async (name, value) => await set(name, value),
+  setItem: async (name, value) => await idbSet(name, value),
   removeItem: async (name) => await del(name),
+};
+
+const defaultCompanionState = {
+  activeMode: 'both',
+  mood: 'happy',
+  growthStage: 2,
+  treeHydration: 72,
+  treeSunlight: 80,
+  catHunger: 68,
+  catAffection: 75,
+  totalNurtures: 3,
+  lastActionEffect: null,
+  message: 'Mochi the Cat is purring under the Sakura Bonsai! Complete tasks to earn points & care for them. 🌸🐾'
 };
 
 const initialDemoTasks = [
@@ -30,80 +43,54 @@ const initialDemoTasks = [
     rescheduleCount: 0,
     subTasks: [],
     aiMotivationalNote: 'Fun Starter! Complete this to earn +10 Care Points for your Cat & Tree.'
-  },
-  {
-    _id: 't2',
-    title: 'Finish Science Project Outline 💻',
-    date: null,
-    timeBlock: 'morning',
-    exactTime: '10:30',
-    category: 'study',
-    priorityColor: 'red',
-    estimatedMinutes: 45,
-    isDopamineStarter: false,
-    isGuiltFreeHobby: false,
-    isBareMinimum: true,
-    isTwoMinuteTask: false,
-    status: 'pending',
-    rescheduleCount: 1,
-    subTasks: [],
-    aiMotivationalNote: '30m Grace Period active. Click the robot icon to break it into 3 easy steps!'
-  },
-  {
-    _id: 't3',
-    title: 'Play Video Games for 1 Hour 🎮',
-    date: null,
-    timeBlock: 'afternoon',
-    exactTime: null,
-    category: 'entertainment',
-    priorityColor: 'purple',
-    estimatedMinutes: 60,
-    isDopamineStarter: false,
-    isGuiltFreeHobby: true,
-    isBareMinimum: false,
-    isTwoMinuteTask: false,
-    status: 'pending',
-    rescheduleCount: 0,
-    subTasks: [],
-    aiMotivationalNote: 'Guilt-Free Time! Enjoying yourself earns points to keep Mochi the Cat happy.'
   }
 ];
 
 export const useTaskStore = create(
   persist(
     (set, get) => ({
-      awarenessPoints: 65, // Care Points used to keep the Tree & Cat alive
+      awarenessPoints: 65,
       lifelines: 2,
-      energyLevel: 'medium', // 'low' | 'medium' | 'high'
+      energyLevel: 'medium',
       sickMode: false,
-
-      // Realistic Companion Sanctuary State (Both Tree & Cat)
-      companion: {
-        activeMode: 'both', // 'both' | 'cat' | 'tree'
-        mood: 'happy',      // 'thriving' | 'happy' | 'hungry' | 'wilting' | 'sleeping'
-        growthStage: 2,     // 1 to 5 (Tree blossoms & Cat aura grow with care)
-        treeHydration: 72,  // 0 to 100%
-        treeSunlight: 80,   // 0 to 100%
-        catHunger: 68,      // 0 to 100% (100 = full)
-        catAffection: 75,   // 0 to 100%
-        totalNurtures: 3,
-        lastActionEffect: null, // 'water' | 'sun' | 'feed' | 'pet'
-        message: 'Mochi the Cat is purring under the Sakura Bonsai! Complete tasks to earn points & care for them. 🌸🐾'
-      },
-
+      companion: defaultCompanionState,
       tasks: initialDemoTasks,
       doneList: [],
       brainDumpHistory: [],
       twoMinutePopupTask: null,
       delayReasonModalTask: null,
 
-      // Switch view between Both, Cat Focus, or Tree Focus
+      // === NEW: Fetch from MongoDB Cloud on Login ===
+      fetchTasks: async () => {
+        try {
+          const res = await apiClient.get('/tasks');
+          if (res.data) {
+            set({ tasks: res.data });
+          }
+        } catch (error) {
+          console.error('Failed to sync tasks from cloud:', error);
+        }
+      },
+
+      // === NEW: Clear Local Data on Logout ===
+      clearStore: () => {
+        set({
+          awarenessPoints: 65,
+          lifelines: 2,
+          energyLevel: 'medium',
+          sickMode: false,
+          companion: defaultCompanionState,
+          tasks: [],
+          doneList: [],
+          brainDumpHistory: []
+        });
+      },
+
       setCompanionViewMode: (mode) =>
         set((state) => ({
           companion: { ...state.companion, activeMode: mode }
         })),
 
-      // Spend earned points to feed/water/nurture the Cat & Tree
       nurtureCompanion: (actionType) =>
         set((state) => {
           const costs = { water: 10, sun: 10, feed: 15, play: 10 };
@@ -237,7 +224,7 @@ export const useTaskStore = create(
         const newTask = {
           _id: 't_' + Date.now() + Math.random().toString(36).slice(2, 6),
           title: rawText,
-          date: manualDate || new Date().toISOString().split('T')[0], // Sets to today if left empty
+          date: manualDate || new Date().toISOString().split('T')[0],
           timeBlock: resolvedTimeBlock,
           exactTime: manualExactTime || null,
           category:
@@ -285,7 +272,6 @@ export const useTaskStore = create(
           .map((s) => s.trim())
           .filter((s) => s.length > 2);
 
-        // Schedule brain dump items for tomorrow
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         const tomorrowStr = tomorrow.toISOString().split('T')[0];
@@ -429,7 +415,6 @@ export const useTaskStore = create(
             nextLife -= 1;
             msg = 'Streak Saver 💖 protected your sanctuary from wilting!';
           } else {
-            // Procrastinating past 3 times makes the tree slightly thirsty and cat hungry
             treeHydration = Math.max(20, treeHydration - 15);
             catHunger = Math.max(20, catHunger - 15);
             msg = 'Your Tree looks a bit thirsty & Mochi is hungry. Complete a tiny warm-up task to care for them! 🌱';
@@ -455,25 +440,36 @@ export const useTaskStore = create(
       breakdownTaskWithAI: async (taskId) => {
         const task = get().tasks.find((t) => t._id === taskId);
         if (!task) return;
+
+        // UI-তে লোডিং স্টেটের জন্য সাময়িক মেসেজ
         set((state) => ({
-          tasks: state.tasks.map((t) =>
-            t._id === taskId
-              ? {
-                  ...t,
-                  subTasks: [
-                    { title: `Open the workspace for "${t.title}" (just 2 mins)`, isCompleted: false },
-                    { title: 'Finish the easiest 20% first to build momentum', isCompleted: false },
-                    { title: 'Complete the remaining steps & celebrate', isCompleted: false }
-                  ],
-                  aiMotivationalNote: 'AI broke this down into 3 gentle steps! Start with step 1. 🤖'
-                }
-              : t
-          ),
-          companion: {
-            ...state.companion,
-            message: 'Bite-sized steps make everything easier! You got this. 🐾'
-          }
+          companion: { ...state.companion, message: 'AI is thinking... breaking it down for you! 🤖✨' }
         }));
+
+        try {
+          const res = await apiClient.post(`/ai/breakdown/${taskId}`);
+          
+          set((state) => ({
+            tasks: state.tasks.map((t) =>
+              t._id === taskId
+                ? {
+                    ...t,
+                    subTasks: res.data.subTasks,
+                    aiMotivationalNote: res.data.message
+                  }
+                : t
+            ),
+            companion: {
+              ...state.companion,
+              message: 'Bite-sized steps make everything easier! You got this. 🐾'
+            }
+          }));
+        } catch (error) {
+          console.error("AI Breakdown failed:", error);
+          set((state) => ({
+            companion: { ...state.companion, message: 'Oops, AI is sleepy right now. Try again later! 💤' }
+          }));
+        }
       },
 
       toggleSubTask: (taskId, idx) =>
