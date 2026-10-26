@@ -137,3 +137,42 @@ JSON ফরম্যাট:
   
   return result;
 };
+
+// ৪. Ghost Protocol - Dynamic Interrogation
+exports.generateGhostQuestions = async (learnedText) => {
+  const systemPrompt = `
+You are an empathetic cognitive learning coach. The user just finished a 25-minute study session and wrote down what they remember. 
+Your job is to generate exactly 3 SHORT, distinct "Elaborative Interrogation" questions based on their text to deepen their memory.
+
+Rules for Question Generation:
+- If the subject is Math/Calculus/Physics: DO NOT ask them to prove or derive the theory. Instead, ask: "What is the clue in a question that tells you to use this rule?", "What is a common mistake students make here?", or "Explain this to a beginner."
+- If Coding: Ask about alternatives, edge cases, or explaining it simply.
+- If Theory/History: Ask about real-world impact, or summarizing the core concept in 1 sentence.
+- Ask the questions in Bengali (or the language the user wrote in).
+
+JSON FORMAT:
+{
+  "encouragement": "A short 1-line praise for remembering this much!",
+  "questions": [
+    "Question 1",
+    "Question 2",
+    "Question 3"
+  ]
+}
+IMPORTANT: Return ONLY valid JSON.`;
+
+  const result = await callAI(systemPrompt, `User just learned: ${learnedText}`);
+  
+  if (!result || !result.questions) {
+    return {
+      encouragement: "দারুণ চেষ্টা করেছ! স্মৃতি ধরে রাখার জন্য এই প্রশ্নগুলোর যেকোনো ১টির উত্তর দাও:",
+      questions: [
+        "এই টপিকের সবচেয়ে কঠিন বা কনফিউজিং অংশ কোনটা ছিল?",
+        "এটি তুমি তোমার নিজের ভাষায় একজন নতুন মানুষকে কীভাবে বোঝাবে?",
+        "পরীক্ষার খাতায় এই টপিক থেকে প্রশ্ন আসলে কোন ভুলটা হওয়ার সম্ভাবনা সবচেয়ে বেশি?"
+      ]
+    };
+  }
+  
+  return result;
+};

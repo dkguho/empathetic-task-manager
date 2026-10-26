@@ -23,7 +23,7 @@ export default function EmpatheticDashboard() {
     setEnergyLevel, toggleSickMode, setCompanionViewMode, nurtureCompanion,
     clearCompanionEffect, addSmartTask, processBrainDumpToTasks, completeTask,
     deleteTask, snoozeTask15Min, triggerReschedule, submitDelayReason, breakdownTaskWithAI,
-    toggleSubTask, closeModals, fetchTasks, clearStore
+    toggleSubTask, closeModals, fetchTasks, clearStore, fetchGhostQuestions, ghostQuestionsData, isGhostLoading, completeGhostProtocol
   } = useTaskStore();
 
   const [activeTab, setActiveTab] = useState('tasks');
@@ -40,6 +40,10 @@ export default function EmpatheticDashboard() {
   const [notifPermission, setNotifPermission] = useState('default');
   const [activeAlarmTask, setActiveAlarmTask] = useState(null);
   const triggeredAlarmsRef = useRef(new Set());
+
+  const [showGhostModal, setShowGhostModal] = useState(false);
+  const [ghostInputText, setGhostInputText] = useState('');
+  const [ghostAnswerText, setGhostAnswerText] = useState('');
 
   const totalTime = 25 * 60;
   const [timeLeft, setTimeLeft] = useState(totalTime);
@@ -135,6 +139,7 @@ export default function EmpatheticDashboard() {
       setIsRunning(false);
       playAlarmSound();
       firePremiumConfetti();
+      setShowGhostModal(true);
       if (notifPermission === 'granted') {
         new Notification('🎉 Focus Session Complete!', {
           body: 'Awesome job! Take a short break and hydrate.'
@@ -630,6 +635,113 @@ export default function EmpatheticDashboard() {
                 <button onClick={() => { if (!delayReasonText.trim()) return; submitDelayReason(delayReasonModalTask._id, delayReasonText, useLifelineCheck); setDelayReasonText(''); }} className="btn-premium flex-1 py-2.5 text-xs justify-center">Save Reason</button>
               </div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {/* Ghost Protocol Modal (Active Retrieval Engine) */}
+      <AnimatePresence>
+        {showGhostModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="bento-box bg-white max-w-xl w-full p-6 sm:p-8 space-y-6 border-2 border-indigo-400 shadow-2xl"
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-12 h-12 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+                  <Brain className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-extrabold text-[#1e1e2d] m-0">Ghost Protocol 🕵️‍♂️</h3>
+                  <p className="text-xs font-bold text-indigo-600 m-0">
+                    Close your books. Active Retrieval Mode.
+                  </p>
+                </div>
+              </div>
+
+              {!ghostQuestionsData ? (
+                // Phase 1: Free Recall (Brain Dump)
+                <div className="space-y-4">
+                  <p className="text-sm text-[#646477] font-medium">
+                    গত ২৫ মিনিটে তুমি কী কী শিখেছ বা কাজ করেছ? না দেখে নিজের ভাষায় নিচে লেখো। (ভুল হলে সমস্যা নেই!)
+                  </p>
+                  <textarea
+                    rows={4}
+                    value={ghostInputText}
+                    onChange={(e) => setGhostInputText(e.target.value)}
+                    placeholder="যেমন: আজ ক্যালকুলাসের চেইন রুল প্র্যাকটিস করলাম..."
+                    className="w-full rounded-2xl bg-slate-50 border border-slate-200 p-4 text-sm text-[#1e1e2d] outline-none focus:border-indigo-400 focus:bg-white transition-all"
+                  />
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowGhostModal(false)}
+                      className="btn-glass-pill px-5 py-2.5 text-xs font-bold"
+                    >
+                      Skip
+                    </button>
+                    <button
+                      onClick={() => fetchGhostQuestions(ghostInputText)}
+                      disabled={isGhostLoading || !ghostInputText.trim()}
+                      className="btn-premium flex-1 py-2.5 text-xs justify-center flex items-center gap-2"
+                    >
+                      {isGhostLoading ? (
+                        <span className="animate-pulse">AI is creating context questions... 🤖</span>
+                      ) : (
+                        <>Submit Recall <Sparkles className="w-4 h-4" /></>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                // Phase 2: AI Elaborative Interrogation
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+                  <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl">
+                    <p className="text-xs font-bold text-emerald-700 m-0">
+                      {ghostQuestionsData.encouragement}
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    {ghostQuestionsData.questions.map((q, idx) => (
+                      <div key={idx} className="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100">
+                        <p className="text-sm font-semibold text-indigo-900 m-0">
+                          <span className="font-extrabold text-indigo-400 mr-2">Q{idx + 1}.</span>{q}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <p className="text-xs font-bold text-[#646477] mt-4 mb-2">
+                    যেকোনো ১টি প্রশ্নের উত্তর নিচে দাও (১-২ লাইনে):
+                  </p>
+                  <textarea
+                    rows={2}
+                    value={ghostAnswerText}
+                    onChange={(e) => setGhostAnswerText(e.target.value)}
+                    placeholder="আমি Q2 এর উত্তর দিচ্ছি: কারণ..."
+                    className="w-full rounded-2xl bg-white border border-indigo-200 p-3 text-sm text-[#1e1e2d] outline-none focus:ring-2 focus:ring-indigo-300"
+                  />
+
+                  <button
+                    onClick={() => {
+                      completeGhostProtocol();
+                      setShowGhostModal(false);
+                      setGhostInputText('');
+                      setGhostAnswerText('');
+                    }}
+                    disabled={!ghostAnswerText.trim()}
+                    className="w-full btn-premium py-3 text-sm justify-center flex items-center gap-2 mt-2 bg-gradient-to-r from-indigo-500 to-purple-500 shadow-indigo-200"
+                  >
+                    Unlock Deep Memory (+50 Pts) <Trophy className="w-4 h-4" />
+                  </button>
+                </motion.div>
+              )}
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

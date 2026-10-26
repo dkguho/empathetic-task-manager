@@ -7,6 +7,7 @@ const { getWeeklyDashboard } = require('../controllers/statsController');
 // AI Routes
 router.post('/smart-input', protect, processSmartInput);
 router.post('/breakdown/:id', protect, breakdownTask);
+router.post('/ghost-protocol', protect, require('../controllers/aiController').processGhostProtocol);
 
 // Analytics & Habit Tracker Route
 router.get('/weekly-dashboard', protect, getWeeklyDashboard);

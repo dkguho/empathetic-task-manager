@@ -1,7 +1,7 @@
 const Task = require('../models/Task');
 const DailyLog = require('../models/DailyLog');
 const { parseSmartInputOrBrainDump, generateSubtasks } = require('../services/aiService');
-
+const { generateGhostQuestions } = require('../services/aiService');
 const getTodayDateString = () => new Date().toISOString().split('T')[0];
 
 // ১. স্মার্ট ইনপুট বা রাতের ব্রেইন ডাম্প থেকে স্বয়ংক্রিয়ভাবে টাস্ক তৈরি করা
@@ -90,5 +90,21 @@ exports.breakdownTask = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: 'কাজটি ছোট ধাপে ভাঙতে সমস্যা হয়েছে', error: error.message });
+  }
+};
+
+// ৩. Ghost Protocol Interrogation
+exports.processGhostProtocol = async (req, res) => {
+  try {
+    const { learnedText } = req.body;
+    if (!learnedText) return res.status(400).json({ message: 'Please provide what you learned.' });
+
+    const aiResponse = await generateGhostQuestions(learnedText);
+    
+    // Optional: Save this to DailyLog if you want to track their ghost protocol answers later
+    
+    res.json(aiResponse);
+  } catch (error) {
+    res.status(500).json({ message: 'Ghost protocol processing failed', error: error.message });
   }
 };

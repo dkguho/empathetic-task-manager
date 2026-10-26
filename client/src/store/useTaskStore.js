@@ -93,7 +93,9 @@ export const useTaskStore = create(
           tasks: [],
           doneList: [],
           brainDumpHistory: [],
-          analyticsData: null
+          analyticsData: null,
+          ghostQuestionsData: null,
+      isGhostLoading: false,
         });
       },
 
@@ -492,6 +494,31 @@ export const useTaskStore = create(
             return { ...t, subTasks: subs };
           })
         })),
+
+        fetchGhostQuestions: async (learnedText) => {
+        if (!learnedText.trim()) return;
+        set({ isGhostLoading: true, ghostQuestionsData: null });
+        try {
+          const res = await apiClient.post('/ai/ghost-protocol', { learnedText });
+          set({ ghostQuestionsData: res.data, isGhostLoading: false });
+        } catch (error) {
+          console.error("Ghost Protocol failed:", error);
+          set({ isGhostLoading: false });
+        }
+      },
+
+      completeGhostProtocol: () => {
+        // Award massive points for doing the hard cognitive work
+        set((state) => ({
+          awarenessPoints: state.awarenessPoints + 50,
+          ghostQuestionsData: null,
+          companion: {
+            ...state.companion,
+            mood: 'thriving',
+            message: 'Deep Memory Unlocked! 🧠 You earned +50 Care Points for active retrieval!'
+          }
+        }));
+      },
 
       closeModals: () => set({ twoMinutePopupTask: null, delayReasonModalTask: null })
     }),
