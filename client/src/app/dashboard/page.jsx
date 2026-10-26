@@ -28,6 +28,7 @@ export default function EmpatheticDashboard() {
 
   const [activeTab, setActiveTab] = useState('tasks');
   const [dateFilter, setDateFilter] = useState('today');
+  const [todayStr, setTodayStr] = useState('');
   const [smartInput, setSmartInput] = useState('');
   const [selectedTimeOfDay, setSelectedTimeOfDay] = useState('auto');
   const [exactTimeInput, setExactTimeInput] = useState('');
@@ -207,7 +208,9 @@ export default function EmpatheticDashboard() {
   };
 
   const visibleTasks = tasks.filter((t) => {
-    const todayStr = new Date().toISOString().split('T')[0];
+    // Wait for the client-side date to mount before rendering tasks
+    if (!todayStr) return false; 
+
     const taskDate = t.date || todayStr;
 
     if (dateFilter === 'today' && taskDate !== todayStr) return false;
