@@ -59,6 +59,16 @@ export const useTaskStore = create(
       brainDumpHistory: [],
       twoMinutePopupTask: null,
       delayReasonModalTask: null,
+      analyticsData: null, // NEW: Holds backend stats
+
+      fetchAnalytics: async () => {
+        try {
+          const res = await apiClient.get('/ai/weekly-dashboard');
+          if (res.data) set({ analyticsData: res.data });
+        } catch (error) {
+          console.error('Failed to fetch analytics:', error);
+        }
+      },
 
       // === NEW: Fetch from MongoDB Cloud on Login ===
       fetchTasks: async () => {
@@ -82,7 +92,8 @@ export const useTaskStore = create(
           companion: defaultCompanionState,
           tasks: [],
           doneList: [],
-          brainDumpHistory: []
+          brainDumpHistory: [],
+          analyticsData: null
         });
       },
 

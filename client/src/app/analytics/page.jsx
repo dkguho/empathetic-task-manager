@@ -1,5 +1,5 @@
 'use client';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import {
@@ -9,48 +9,46 @@ import {
 import { useTaskStore } from '@/store/useTaskStore';
 
 export default function AnalyticsDashboard() {
-  const { awarenessPoints, doneList, tasks, companion } = useTaskStore();
+  const { awarenessPoints, companion, fetchAnalytics, analyticsData } = useTaskStore();
 
-  const totalCompleted = doneList.length;
-  const totalPending = tasks.length;
-  const totalSnoozed = tasks.reduce((acc, task) => acc + (task.rescheduleCount || 0), 0);
+  useEffect(() => {
+    fetchAnalytics();
+  }, [fetchAnalytics]);
 
-  // Dynamic Completion Rate (Starts at 0 for a fresh account)
-  const completionRate =
-    totalCompleted + totalPending === 0
-      ? 0 
-      : Math.round((totalCompleted / (totalCompleted + totalPending)) * 100);
+  // Real Database Metrics
+  const totalCompleted = analyticsData?.weeklyMetrics?.completedCount || 0;
+  const totalTasks = analyticsData?.weeklyMetrics?.totalTasks || 0;
+  const totalSnoozed = analyticsData?.weeklyMetrics?.totalRescheduled || 0;
+  const completionRate = totalTasks === 0 ? 0 : Math.round((totalCompleted / totalTasks) * 100);
 
-  // Dynamic Time Block Calculator
-  const getBlockRate = (block) => {
-    const blockPending = tasks.filter(t => t.timeBlock === block).length;
-    const blockDone = doneList.filter(t => t.timeBlock === block).length;
-    const total = blockPending + blockDone;
-    return total === 0 ? 0 : Math.round((blockDone / total) * 100);
-  };
+  // Real AI Habit Report
+  const aiReport = analyticsData?.aiHabitReport || {};
+
+  // Procrastination Stats by Time Block (from backend)
+  const delays = analyticsData?.charts?.procrastinationByTimeBlock || { morning: 0, afternoon: 0, night: 0 };
+  const maxDelay = Math.max(1, delays.morning, delays.afternoon, delays.night);
 
   const timeBlockBreakdown = [
     { 
       label: '🌅 সকাল (Morning)', 
-      rate: getBlockRate('morning'), 
-      note: getBlockRate('morning') > 0 ? 'Peak Focus!' : 'No tasks done yet.', 
+      rate: maxDelay === 0 ? 0 : Math.round((delays.morning / maxDelay) * 100),
+      note: delays.morning > 0 ? `${delays.morning}x delayed` : 'Perfect focus!', 
       color: 'bg-emerald-400' 
     },
     { 
       label: '☀️ বিকেল (Afternoon)', 
-      rate: getBlockRate('afternoon'), 
-      note: getBlockRate('afternoon') > 0 ? 'Keep it up!' : 'No tasks done yet.', 
+      rate: maxDelay === 0 ? 0 : Math.round((delays.afternoon / maxDelay) * 100),
+      note: delays.afternoon > 0 ? `${delays.afternoon}x delayed` : 'Perfect focus!', 
       color: 'bg-amber-400' 
     },
     { 
       label: '🌙 রাত (Night)', 
-      rate: getBlockRate('night'), 
-      note: getBlockRate('night') > 0 ? 'Great for relaxing.' : 'No tasks done yet.', 
+      rate: maxDelay === 0 ? 0 : Math.round((delays.night / maxDelay) * 100),
+      note: delays.night > 0 ? `${delays.night}x delayed` : 'Perfect focus!', 
       color: 'bg-purple-400' 
     }
   ];
 
-  // Dynamic Weekly Momentum (Shows 0 for past days, and real rate for Today)
   const weeklyBars = [
     { day: 'Day 1', completed: 0, gradient: 'from-slate-200/50 to-slate-300/50' },
     { day: 'Day 2', completed: 0, gradient: 'from-slate-200/50 to-slate-300/50' },
@@ -154,17 +152,20 @@ export default function AnalyticsDashboard() {
             </div>
 
             <div className="space-y-3 bg-white/70 border border-white rounded-3xl p-5">
-              {totalCompleted === 0 ? (
-                <p className="text-sm sm:text-base text-[#1e1e2d] leading-relaxed m-0">
-                  <strong className="text-purple-700">💡 ইনসাইট:</strong> এখনো কোনো ডেটা নেই! ড্যাশবোর্ডে গিয়ে একটি ২-মিনিটের সহজ কাজ সম্পন্ন করে তোমার যাত্রা শুরু করো।
+              {!analyticsData ? (
+                <p className="text-sm sm:text-base text-[#1e1e2d] leading-relaxed m-0 animate-pulse">
+                  <strong className="text-purple-700">💡 AI is analyzing your patterns...</strong>
                 </p>
               ) : (
                 <>
                   <p className="text-sm sm:text-base text-[#1e1e2d] leading-relaxed m-0">
-                    <strong className="text-purple-700">💡 মূল প্যাটার্ন:</strong> তুমি ইতোমধ্যে <strong>{totalCompleted}টি</strong> কাজ শেষ করেছ! তোমার বর্তমান সাকসেস রেট <strong>{completionRate}%</strong>।
+                    <strong className="text-purple-700">💡 মূল প্যাটার্ন:</strong> {aiReport.mainInsight || "No insights yet."}
                   </p>
                   <p className="text-sm sm:text-base text-[#1e1e2d] leading-relaxed m-0">
-                    <strong className="text-emerald-700">🎯 অ্যাকশন প্ল্যান:</strong> এই মোমেন্টাম ধরে রাখতে বড় কাজগুলো ছোট ধাপে ভেঙে নাও এবং Mochi-র যত্ন নিতে থাকো।
+                    <strong className="text-emerald-700">🎯 অ্যাকশন প্ল্যান:</strong> {aiReport.actionableSuggestion || "Complete a few tasks first!"}
+                  </p>
+                  <p className="text-sm sm:text-base text-[#1e1e2d] leading-relaxed m-0">
+                    <strong className="text-rose-600">💖 কোচ নোট:</strong> {aiReport.cheerleaderNote || "You're doing great! 🌟"}
                   </p>
                 </>
               )}
