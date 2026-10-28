@@ -75,7 +75,17 @@ export const useTaskStore = create(
         try {
           const res = await apiClient.get('/tasks');
           if (res.data) {
-            set({ tasks: res.data });
+            const pendingTasks = res.data.filter(t => t.status !== 'completed');
+            // ডান-লিস্ট যেন অতিরিক্ত বড় হয়ে ড্যাশবোর্ড স্লো না করে, তাই শেষের ২০টি কাজ রাখা হলো
+            const completedTasks = res.data
+              .filter(t => t.status === 'completed')
+              .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))
+              .slice(0, 20); 
+            
+            set({ 
+              tasks: pendingTasks, 
+              doneList: completedTasks 
+            });
           }
         } catch (error) {
           console.error('Failed to sync tasks from cloud:', error);
@@ -315,6 +325,7 @@ export const useTaskStore = create(
 
         try {
           await apiClient.patch(`/tasks/${taskId}/complete`);
+          get().fetchAnalytics(); // NEW: কাজ শেষ হলেই ব্যাকএন্ড থেকে অ্যানালিটিক্স আপডেট হবে!
         } catch (e) {}
       },
 
@@ -348,7 +359,7 @@ export const useTaskStore = create(
         }));
       },
 
-      triggerReschedule: (taskId) => {
+      triggerReschedule: async (taskId) => {
         const task = get().tasks.find((t) => t._id === taskId);
         if (!task) return;
         if (task.rescheduleCount >= 3) {
@@ -367,6 +378,11 @@ export const useTaskStore = create(
               : t
           )
         }));
+
+        try {
+          await apiClient.patch(`/tasks/${taskId}/reschedule`, {});
+          get().fetchAnalytics(); // NEW: ডেটাবেসে সিঙ্ক এবং অ্যানালিটিক্স আপডেট
+        } catch (e) {}
       },
 
       submitDelayReason: async (taskId, reason, useLifeline) => {
@@ -401,6 +417,11 @@ export const useTaskStore = create(
             }
           };
         });
+
+        try {
+          await apiClient.patch(`/tasks/${taskId}/reschedule`, { delayReason: reason, useLifeline });
+          get().fetchAnalytics(); // NEW: কারণ সেভ হওয়ার সাথে সাথে অ্যানালিটিক্স আপডেট
+        } catch (e) {}
       },
 
       breakdownTaskWithAI: async (taskId) => {

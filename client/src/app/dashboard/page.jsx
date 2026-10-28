@@ -46,9 +46,22 @@ const [todayStr, setTodayStr] = useState('');
   const [ghostInputText, setGhostInputText] = useState('');
   const [ghostAnswerText, setGhostAnswerText] = useState('');
 
-  const totalTime = 25 * 60;
+  // NEW: Editable Timer State
+  const [timerMinutes, setTimerMinutes] = useState(25);
+  const totalTime = timerMinutes * 60;
   const [timeLeft, setTimeLeft] = useState(totalTime);
   const [isRunning, setIsRunning] = useState(false);
+
+  // NEW: Timer Edit Handler
+  const handleEditTimer = () => {
+    const mins = prompt("কত মিনিটের জন্য ফোকাস করতে চাও? (যেমন: 5, 25, 50)", timerMinutes);
+    if (mins && !isNaN(mins) && Number(mins) > 0) {
+      const newMins = Number(mins);
+      setTimerMinutes(newMins);
+      setTimeLeft(newMins * 60);
+      setIsRunning(false); // এডিট করলে টাইমার পজ হয়ে যাবে
+    }
+  };
   const circumference = 2 * Math.PI * 80;
 
   useEffect(() => {
@@ -575,7 +588,15 @@ const [todayStr, setTodayStr] = useState('');
 
             <div className="bento-box p-6 text-center">
               <div className="flex items-center justify-between mb-4">
-                <h5 className="text-base font-extrabold text-[#1e1e2d] flex items-center gap-2 m-0"><Clock className="w-5 h-5 text-[#a18cd1]" /><span>Focus Timer</span></h5>
+                <div className="flex items-center gap-2 m-0">
+  <h5 className="text-base font-extrabold text-[#1e1e2d] flex items-center gap-2 m-0">
+    <Clock className="w-5 h-5 text-[#a18cd1]" />
+    <span>Focus Timer</span>
+  </h5>
+  <button onClick={handleEditTimer} className="text-xs px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full font-bold transition-all ml-1">
+    Edit ✏️
+  </button>
+</div>
                 <button onClick={playAlarmSound} className="text-xs font-bold text-purple-600 hover:text-purple-800 flex items-center gap-1"><Volume2 className="w-4 h-4" /> Test Sound</button>
               </div>
 
