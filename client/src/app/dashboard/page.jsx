@@ -23,7 +23,7 @@ export default function EmpatheticDashboard() {
     setEnergyLevel, toggleSickMode, setCompanionViewMode, nurtureCompanion,
     clearCompanionEffect, addSmartTask, processBrainDumpToTasks, completeTask,
     deleteTask, snoozeTask15Min, triggerReschedule, submitDelayReason, breakdownTaskWithAI,
-    toggleSubTask, closeModals, fetchTasks, clearStore, fetchGhostQuestions, ghostQuestionsData, isGhostLoading, completeGhostProtocol
+    toggleSubTask, closeModals, fetchTasks, clearStore, fetchGhostQuestions, ghostQuestionsData, isGhostLoading, completeGhostProtocol, clearGhostData
   } = useTaskStore();
 
   const [activeTab, setActiveTab] = useState('tasks');
@@ -102,16 +102,13 @@ const [todayStr, setTodayStr] = useState('');
     }
   }, [initAuth, fetchTasks]);
 
-  // NEW: অটোমেটিকভাবে আজকের ডেট এবং কারেন্ট টাইম সেট করা
   useEffect(() => {
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
     
     setTodayStr(dateStr);
     setSelectedDateInput(dateStr);
-    setExactTimeInput(`${hours}:${minutes}`);
+    setExactTimeInput(''); // <--- কারেন্ট টাইমের বদলে ডিফল্টভাবে ফাঁকা থাকবে
   }, []);
 
   const playAlarmSound = () => {
@@ -191,19 +188,25 @@ const [todayStr, setTodayStr] = useState('');
     let interval = null;
     if (isRunning && timeLeft > 0) {
       interval = setInterval(() => setTimeLeft((t) => t - 1), 1000);
-    } else if (timeLeft === 0) {
+    } else if (timeLeft === 0 && isRunning) { // NEW: isRunning চেক করা হলো ডাবল-ট্রিগার বন্ধ করতে
       setIsRunning(false);
       playAlarmSound();
       firePremiumConfetti();
+      
+      // NEW: মোডাল ওপেন হওয়ার আগে পুরনো সব ডেটা এবং প্রশ্ন মুছে ফ্রেশ করা হলো
+      clearGhostData();
+      setGhostInputText('');
+      setGhostAnswerText('');
       setShowGhostModal(true);
+      
       if (notifPermission === 'granted') {
         new Notification('🎉 Focus Session Complete!', {
-          body: 'Awesome job! Take a short break and hydrate.'
+          body: 'Awesome job! Time for the Ghost Protocol.'
         });
       }
     }
     return () => clearInterval(interval);
-  }, [isRunning, timeLeft, notifPermission]);
+  }, [isRunning, timeLeft, notifPermission, clearGhostData]);
 
   const firePremiumConfetti = () => {
     confetti({
@@ -773,7 +776,12 @@ const [todayStr, setTodayStr] = useState('');
                   />
                   <div className="flex gap-3">
                     <button
-                      onClick={() => setShowGhostModal(false)}
+                      onClick={() => {
+                        setShowGhostModal(false);
+                        clearGhostData(); // NEW: স্কিপ করলে ডেটা ক্লিয়ার হবে
+                        setGhostInputText('');
+                        setGhostAnswerText('');
+                      }}
                       className="btn-glass-pill px-5 py-2.5 text-xs font-bold"
                     >
                       Skip

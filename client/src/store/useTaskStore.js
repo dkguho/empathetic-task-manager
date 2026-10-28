@@ -494,6 +494,9 @@ export const useTaskStore = create(
         }));
       },
 
+      // === NEW: Ghost Protocol-এর আগের ডেটা মুছে ফেলার ফাংশন ===
+      clearGhostData: () => set({ ghostQuestionsData: null }),
+
       closeModals: () => set({ twoMinutePopupTask: null, delayReasonModalTask: null })
     }),
     {
