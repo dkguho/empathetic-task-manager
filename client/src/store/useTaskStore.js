@@ -203,79 +203,32 @@ export const useTaskStore = create(
       },
 
       addSmartTask: async (rawText, options = {}) => {
-        const {
-          manualTimeBlock = 'auto',
-          manualExactTime = '',
-          manualDate = '',
-          manualPriority = 'blue',
-          isBrainDump = false
-        } = options;
-
-        const lower = rawText.toLowerCase();
-        const isTwoMin =
-          lower.includes('water') ||
-          rawText.includes('জল') ||
-          lower.includes('2 min') ||
-          lower.includes('call') ||
-          manualPriority === 'green';
-
-        let resolvedTimeBlock = manualTimeBlock;
-        if (manualTimeBlock === 'auto') {
-          if (lower.includes('morning') || rawText.includes('সকাল')) resolvedTimeBlock = 'morning';
-          else if (
-            lower.includes('afternoon') ||
-            lower.includes('evening') ||
-            rawText.includes('দুপুর') ||
-            rawText.includes('বিকেল')
-          )
-            resolvedTimeBlock = 'afternoon';
-          else if (lower.includes('night') || lower.includes('tonight') || rawText.includes('রাত'))
-            resolvedTimeBlock = 'night';
-          else resolvedTimeBlock = 'anytime';
-        }
-
-        const newTask = {
-          _id: 't_' + Date.now() + Math.random().toString(36).slice(2, 6),
-          title: rawText,
-          date: manualDate || new Date().toISOString().split('T')[0],
-          timeBlock: resolvedTimeBlock,
-          exactTime: manualExactTime || null,
-          category:
-            manualPriority === 'purple'
-              ? 'entertainment'
-              : manualPriority === 'green'
-              ? 'warmup'
-              : 'work',
-          priorityColor: manualPriority,
-          estimatedMinutes: isTwoMin ? 2 : 25,
-          isDopamineStarter: manualPriority === 'green',
-          isGuiltFreeHobby: manualPriority === 'purple',
-          isBareMinimum: manualPriority === 'red' || manualPriority === 'green',
-          isTwoMinuteTask: isTwoMin,
-          status: 'pending',
-          rescheduleCount: 0,
-          subTasks: [],
-          aiMotivationalNote: isBrainDump
-            ? 'Organized from your Brain Dump! 🌙'
-            : manualExactTime
-            ? `Scheduled for ${manualExactTime} (+30m Grace Period included)`
-            : 'Complete this to earn Care Points for Mochi & your Tree! ✨'
-        };
-
-        set((state) => ({
-          tasks: [newTask, ...state.tasks],
-          twoMinutePopupTask: isTwoMin && !isBrainDump ? newTask : null,
-          companion: {
-            ...state.companion,
-            message: isTwoMin
-              ? '2-Minute Rule! Knock this out right now for instant Care Points! ⚡'
-              : 'New task added! Mochi is cheering you on. 🐾'
-          }
+        if (!rawText.trim()) return;
+        
+        // UI Loading State
+        set((state) => ({ 
+          companion: { ...state.companion, message: 'AI is thinking... adding your task! 🤖✨' } 
         }));
-
+        
         try {
-          await apiClient.post('/tasks', newTask);
-        } catch (e) {}
+          // রিয়েল এআই এবং ব্যাকএন্ডে ম্যানুয়াল ডেট/টাইম (overrides) পাঠানো হচ্ছে
+          const res = await apiClient.post('/ai/smart-input', { 
+            rawText, 
+            isNightBrainDump: false,
+            overrides: options 
+          });
+          
+          set((state) => ({
+            tasks: [...res.data.tasks, ...state.tasks],
+            companion: { ...state.companion, message: res.data.message || 'Task added!' },
+            twoMinutePopupTask: res.data.twoMinuteAlerts && res.data.twoMinuteAlerts.length > 0 ? res.data.tasks[0] : null
+          }));
+        } catch (error) {
+          console.error("AI Smart Input failed:", error);
+          set((state) => ({ 
+            companion: { ...state.companion, message: 'Failed to connect to AI. Please try again! 💤' } 
+          }));
+        }
       },
 
       processBrainDumpToTasks: async (dumpText) => {

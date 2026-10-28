@@ -28,7 +28,7 @@ export default function EmpatheticDashboard() {
 
   const [activeTab, setActiveTab] = useState('tasks');
   const [dateFilter, setDateFilter] = useState('today');
-  const [todayStr, setTodayStr] = useState('');
+const [todayStr, setTodayStr] = useState('');
   const [smartInput, setSmartInput] = useState('');
   const [selectedTimeOfDay, setSelectedTimeOfDay] = useState('auto');
   const [exactTimeInput, setExactTimeInput] = useState('');
@@ -58,6 +58,18 @@ export default function EmpatheticDashboard() {
       setNotifPermission(Notification.permission);
     }
   }, [initAuth, fetchTasks]);
+
+  // NEW: অটোমেটিকভাবে আজকের ডেট এবং কারেন্ট টাইম সেট করা
+  useEffect(() => {
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    
+    setTodayStr(dateStr);
+    setSelectedDateInput(dateStr);
+    setExactTimeInput(`${hours}:${minutes}`);
+  }, []);
 
   const playAlarmSound = () => {
     try {
@@ -208,10 +220,11 @@ export default function EmpatheticDashboard() {
   };
 
   const visibleTasks = tasks.filter((t) => {
-    // Wait for the client-side date to mount before rendering tasks
-    if (!todayStr) return false; 
+    if (!todayStr) return false;
 
-    const taskDate = t.date || todayStr;
+    // NEW: ডেটাবেস থেকে আসা scheduledDate ঠিকভাবে রিড করা
+    const rawDate = t.scheduledDate || t.date;
+    const taskDate = rawDate ? new Date(rawDate).toISOString().split('T')[0] : todayStr;
 
     if (dateFilter === 'today' && taskDate !== todayStr) return false;
     if (dateFilter === 'upcoming' && taskDate <= todayStr) return false;

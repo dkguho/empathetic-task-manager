@@ -5,15 +5,15 @@ const { generateGhostQuestions } = require('../services/aiService');
 const getTodayDateString = () => new Date().toISOString().split('T')[0];
 
 // ১. স্মার্ট ইনপুট বা রাতের ব্রেইন ডাম্প থেকে স্বয়ংক্রিয়ভাবে টাস্ক তৈরি করা
+// ১. স্মার্ট ইনপুট বা রাতের ব্রেইন ডাম্প থেকে স্বয়ংক্রিয়ভাবে টাস্ক তৈরি করা
 exports.processSmartInput = async (req, res) => {
   try {
-    const { rawText, isNightBrainDump } = req.body;
+    // NEW: overrides রিসিভ করা হচ্ছে
+    const { rawText, isNightBrainDump, overrides } = req.body;
     if (!rawText) return res.status(400).json({ message: 'কিছু একটা লিখে পাঠাও!' });
 
-    // AI দিয়ে লেখাটি বিশ্লেষণ করা
     const aiResult = await parseSmartInputOrBrainDump(rawText);
 
-    // যদি রাতের Brain Dump হয়, তবে কাজগুলো আগামীকালের তারিখে সেট হবে
     const targetDate = new Date();
     if (isNightBrainDump) {
       targetDate.setDate(targetDate.getDate() + 1);
@@ -28,14 +28,21 @@ exports.processSmartInput = async (req, res) => {
         twoMinuteAlerts.push(`"${item.title}" কাজটি করতে ২ মিনিটেরও কম লাগবে, এখনই করে ফেলবে নাকি? ⚡`);
       }
 
+      // NEW: ইউজারের ম্যানুয়াল ইনপুটগুলো ওভাররাইড হিসেবে কাজ করবে
+      let finalDate = targetDate;
+      if (overrides?.manualDate) finalDate = new Date(overrides.manualDate);
+
+      let finalTimeBlock = item.timeBlock || 'anytime';
+      if (overrides?.manualTimeBlock && overrides.manualTimeBlock !== 'auto') finalTimeBlock = overrides.manualTimeBlock;
+
       const newTask = await Task.create({
         user: req.user._id,
         title: item.title,
-        scheduledDate: targetDate,
-        timeBlock: item.timeBlock || 'anytime',
-        exactTime: item.exactTime || null,
+        scheduledDate: finalDate,
+        timeBlock: finalTimeBlock,
+        exactTime: overrides?.manualExactTime || item.exactTime || null,
         category: item.category || 'work',
-        priorityColor: item.priorityColor || 'blue',
+        priorityColor: overrides?.manualPriority || item.priorityColor || 'blue',
         estimatedMinutes: item.estimatedMinutes || 15,
         isTwoMinuteTask: isTwoMin,
         isDopamineStarter: item.isDopamineStarter || false,
@@ -46,20 +53,19 @@ exports.processSmartInput = async (req, res) => {
       createdTasks.push(newTask);
     }
 
-    // DailyLog-এ ব্রেইন ডাম্প বা সকালের প্রম্পট সেভ করে রাখা
     const updateField = isNightBrainDump
       ? { nightBrainDump: { rawText, isProcessedByAI: true } }
       : { morningPromptInput: rawText };
 
     await DailyLog.findOneAndUpdate(
-      { user: req.user._id, dateString: getTodayDateString() },
+      { user: req.user._id, dateString: new Date().toISOString().split('T')[0] },
       updateField,
       { upsert: true }
     );
 
     res.status(201).json({
       message: aiResult.empatheticMessage,
-      twoMinuteAlerts, // ২ মিনিটের কাজ থাকলে পপ-আপ দেখানোর লিস্ট
+      twoMinuteAlerts,
       tasks: createdTasks
     });
   } catch (error) {
