@@ -176,3 +176,26 @@ IMPORTANT: Return ONLY valid JSON.`;
   
   return result;
 };
+
+// ৫. Ghost Protocol - Answer Evaluation
+exports.evaluateGhostAnswer = async (question, answer) => {
+  const systemPrompt = `
+  You are an empathetic tutor. The user answered a question about what they just studied.
+  Question: "${question}"
+  User's Answer: "${answer}"
+
+  Evaluate if they understand the core concept. It doesn't have to be perfect.
+  Respond ONLY in valid JSON format:
+  {
+    "isCorrect": true or false,
+    "feedback": "A very short 1-2 sentence friendly feedback in Bengali. Gently correct them if they are wrong, or praise them if they are right."
+  }
+  IMPORTANT: Return ONLY valid JSON.`;
+
+  const result = await callAI(systemPrompt, "Evaluate the answer.");
+  
+  if (!result || !result.feedback) {
+    return { isCorrect: true, feedback: "দারুণ চেষ্টা! তোমার কনসেপ্ট মোটামুটি ক্লিয়ার আছে। 🌟" };
+  }
+  return result;
+};

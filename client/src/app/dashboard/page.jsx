@@ -800,7 +800,7 @@ const [todayStr, setTodayStr] = useState('');
                   </div>
                 </div>
               ) : (
-                // Phase 2: AI Elaborative Interrogation
+                // Phase 2: AI Elaborative Interrogation & Feedback
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
                   <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl">
                     <p className="text-xs font-bold text-emerald-700 m-0">
@@ -818,29 +818,54 @@ const [todayStr, setTodayStr] = useState('');
                     ))}
                   </div>
 
-                  <p className="text-xs font-bold text-[#646477] mt-4 mb-2">
-                    যেকোনো ১টি প্রশ্নের উত্তর নিচে দাও (১-২ লাইনে):
-                  </p>
-                  <textarea
-                    rows={2}
-                    value={ghostAnswerText}
-                    onChange={(e) => setGhostAnswerText(e.target.value)}
-                    placeholder="আমি Q2 এর উত্তর দিচ্ছি: কারণ..."
-                    className="w-full rounded-2xl bg-white border border-indigo-200 p-3 text-sm text-[#1e1e2d] outline-none focus:ring-2 focus:ring-indigo-300"
-                  />
+                  {!ghostFeedbackData ? (
+                    <>
+                      <p className="text-xs font-bold text-[#646477] mt-4 mb-2">
+                        যেকোনো ১টি প্রশ্নের উত্তর নিচে দাও (১-২ লাইনে):
+                      </p>
+                      <textarea
+                        rows={2}
+                        value={ghostAnswerText}
+                        onChange={(e) => setGhostAnswerText(e.target.value)}
+                        placeholder="আমি Q2 এর উত্তর দিচ্ছি: কারণ..."
+                        disabled={isEvaluating}
+                        className="w-full rounded-2xl bg-white border border-indigo-200 p-3 text-sm text-[#1e1e2d] outline-none focus:ring-2 focus:ring-indigo-300 disabled:opacity-50"
+                      />
+                      <button
+                        onClick={() => evaluateGhostAnswer(ghostQuestionsData.questions[0], ghostAnswerText)}
+                        disabled={!ghostAnswerText.trim() || isEvaluating}
+                        className="w-full btn-premium py-3 text-sm justify-center flex items-center gap-2 mt-2 bg-gradient-to-r from-indigo-500 to-purple-500 shadow-indigo-200"
+                      >
+                        {isEvaluating ? 'AI is checking your answer... 🤖' : 'Submit Answer ✨'}
+                      </button>
+                    </>
+                  ) : (
+                    // Phase 3: AI Feedback & Claim Points
+                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="mt-4 space-y-4">
+                      <div className={`p-4 rounded-2xl border ${ghostFeedbackData.isCorrect ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
+                        <h4 className={`text-sm font-extrabold mb-1 flex items-center gap-2 ${ghostFeedbackData.isCorrect ? 'text-emerald-700' : 'text-amber-700'}`}>
+                          {ghostFeedbackData.isCorrect ? <CheckCircle2 className="w-4 h-4" /> : <Brain className="w-4 h-4" />}
+                          {ghostFeedbackData.isCorrect ? 'Great Job!' : 'Almost There!'}
+                        </h4>
+                        <p className="text-sm font-medium text-[#1e1e2d] m-0">
+                          {ghostFeedbackData.feedback}
+                        </p>
+                      </div>
 
-                  <button
-                    onClick={() => {
-                      completeGhostProtocol();
-                      setShowGhostModal(false);
-                      setGhostInputText('');
-                      setGhostAnswerText('');
-                    }}
-                    disabled={!ghostAnswerText.trim()}
-                    className="w-full btn-premium py-3 text-sm justify-center flex items-center gap-2 mt-2 bg-gradient-to-r from-indigo-500 to-purple-500 shadow-indigo-200"
-                  >
-                    Unlock Deep Memory (+50 Pts) <Trophy className="w-4 h-4" />
-                  </button>
+                      <button
+                        onClick={() => {
+                          completeGhostProtocol();
+                          setShowGhostModal(false);
+                          clearGhostData();
+                          setGhostInputText('');
+                          setGhostAnswerText('');
+                        }}
+                        className="w-full btn-premium py-3 text-sm justify-center flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-500 shadow-emerald-200"
+                      >
+                        Unlock Deep Memory (+50 Pts) <Trophy className="w-4 h-4" />
+                      </button>
+                    </motion.div>
+                  )}
                 </motion.div>
               )}
             </motion.div>

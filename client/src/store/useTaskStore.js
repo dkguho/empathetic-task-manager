@@ -105,7 +105,10 @@ export const useTaskStore = create(
           brainDumpHistory: [],
           analyticsData: null,
           ghostQuestionsData: null,
-      isGhostLoading: false,
+          isGhostLoading: false,
+          ghostFeedbackData: null, // NEW
+          isEvaluating: false, // NEW
+
         });
       },
 
@@ -481,6 +484,18 @@ export const useTaskStore = create(
         }
       },
 
+      evaluateGhostAnswer: async (question, answer) => {
+        if (!answer.trim()) return;
+        set({ isEvaluating: true, ghostFeedbackData: null });
+        try {
+          const res = await apiClient.post('/ai/ghost-evaluate', { question, answer });
+          set({ ghostFeedbackData: res.data, isEvaluating: false });
+        } catch (error) {
+          console.error("Evaluation failed:", error);
+          set({ isEvaluating: false });
+        }
+      },
+
       completeGhostProtocol: () => {
         // Award massive points for doing the hard cognitive work
         set((state) => ({
@@ -495,7 +510,7 @@ export const useTaskStore = create(
       },
 
       // === NEW: Ghost Protocol-এর আগের ডেটা মুছে ফেলার ফাংশন ===
-      clearGhostData: () => set({ ghostQuestionsData: null }),
+      clearGhostData: () => set({ ghostQuestionsData: null, ghostFeedbackData: null }),
 
       closeModals: () => set({ twoMinutePopupTask: null, delayReasonModalTask: null })
     }),
