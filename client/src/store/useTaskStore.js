@@ -328,7 +328,8 @@ export const useTaskStore = create(
 
         try {
           await apiClient.patch(`/tasks/${taskId}/complete`);
-          get().fetchAnalytics(); // NEW: কাজ শেষ হলেই ব্যাকএন্ড থেকে অ্যানালিটিক্স আপডেট হবে!
+          get().fetchAnalytics(); // অ্যানালিটিক্স আপডেট
+          get().fetchTasks(); // NEW: ব্যাকএন্ডে তৈরি হওয়া Spaced Retrieval টাস্কগুলো সাথে সাথে ড্যাশবোর্ডে আনার জন্য!
         } catch (e) {}
       },
 
