@@ -70,20 +70,30 @@ exports.createTask = async (req, res) => {
   }
 };
 
-// ২. প্রতিদিনের কাজ দেখা (এনার্জি লেভেল অনুযায়ী ফিল্টারসহ)
+// ২. কাজ লোড করা (Calendar এবং Upcoming সাপোর্ট সহ)
 exports.getTasks = async (req, res) => {
   try {
     const { date, lowEnergyFilter } = req.query;
-    const targetDate = date ? new Date(date) : new Date();
-    const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999));
+    let query = { user: req.user._id };
 
-    let query = {
-      user: req.user._id,
-      scheduledDate: { $gte: startOfDay, $lte: endOfDay }
-    };
+    if (date) {
+      // যদি স্পেসিফিক কোনো ডেট চায় (যেমন ক্যালেন্ডার থেকে)
+      const targetDate = new Date(date);
+      const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0));
+      const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999));
+      query.scheduledDate = { $gte: startOfDay, $lte: endOfDay };
+    } else {
+      // ডিফল্টভাবে: গতকাল থেকে শুরু করে আগামী ৩০ দিনের কাজ ফ্রন্টএন্ডে পাঠাবে
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      
+      const nextMonth = new Date();
+      nextMonth.setDate(nextMonth.getDate() + 30);
+      
+      query.scheduledDate = { $gte: yesterday, $lte: nextMonth };
+    }
 
-    // এনার্জি কম থাকলে শুধু Bare Minimum, Warm-up (Dopamine Starter) এবং Guilt-free কাজগুলো দেখাবে
+    // এনার্জি কম থাকলে শুধু Bare Minimum, Warm-up এবং Guilt-free কাজগুলো দেখাবে
     if (lowEnergyFilter === 'true') {
       query.$or = [
         { isBareMinimum: true },
@@ -93,7 +103,7 @@ exports.getTasks = async (req, res) => {
       ];
     }
 
-    const tasks = await Task.find(query).sort({ status: 1, createdAt: 1 });
+    const tasks = await Task.find(query).sort({ scheduledDate: 1, status: 1 });
     res.json(tasks);
   } catch (error) {
     res.status(500).json({ message: 'কাজ লোড করতে সমস্যা হয়েছে', error: error.message });
@@ -209,7 +219,7 @@ exports.rescheduleTask = async (req, res) => {
   }
 };
 
-// ৫. কাজ শেষ করা (Done List, কনফেটি সেলিব্রেশন ও পেটের গ্রোথ)
+// ৫. কাজ শেষ করা এবং স্বয়ংক্রিয় Spaced Retrieval (Interval Trigger)
 exports.completeTask = async (req, res) => {
   try {
     const task = await Task.findOne({ _id: req.params.id, user: req.user._id });
@@ -223,29 +233,20 @@ exports.completeTask = async (req, res) => {
     task.status = 'completed';
     task.completedAt = new Date();
 
-    // পয়েন্ট হিসাব (Dopamine starter বা Guilt-free শখের কাজেও পয়েন্ট বাড়বে যাতে আত্মবিশ্বাস বাড়ে)
+    // পয়েন্ট হিসাব 
     let pointsEarned = task.isDopamineStarter ? 3 : task.isGuiltFreeHobby ? 5 : 10;
     user.awarenessPoints += pointsEarned;
-
-    // থ্রিডি পেট বা গাছ খুশি হবে
     user.companion.mood = 'happy';
 
-    // প্রতিদিনের লগ আপডেট এবং গাছের গ্রোথ চেক
+    // প্রতিদিনের লগ আপডেট 
     const todayLog = await DailyLog.findOneAndUpdate(
       { user: user._id, dateString: getTodayDateString() },
       { $inc: { tasksCompletedCount: 1, pointsChangeToday: pointsEarned } },
       { new: true, upsert: true }
     );
 
-    // দিনে ৩টি কাজ শেষ করলে গাছ/পেট পরের ধাপে বড় হবে (সর্বোচ্চ ৫ ধাপ)
-    if (todayLog.tasksCompletedCount % 3 === 0 && user.companion.growthStage < 5) {
-      user.companion.growthStage += 1;
-    }
-
-    // টানা ৫টি কাজ ঠিকমতো করলে ১টি বোনাস স্ট্রাইক সেভার (Lifeline) পাবে
-    if (todayLog.tasksCompletedCount === 5) {
-      user.lifelines += 1;
-    }
+    if (todayLog.tasksCompletedCount % 3 === 0 && user.companion.growthStage < 5) user.companion.growthStage += 1;
+    if (todayLog.tasksCompletedCount === 5) user.lifelines += 1;
 
     task.aiMotivationalNote = task.isGuiltFreeHobby
       ? 'নিজের আনন্দের জন্য সময় কাটানোও জরুরি! দারুণ করেছ! 🎉'
@@ -254,14 +255,44 @@ exports.completeTask = async (req, res) => {
     await task.save();
     await user.save();
 
+    // ==========================================
+    // 🧠 THE INTERVAL TRIGGER (SPACED RETRIEVAL)
+    // ==========================================
+    // চেক করা হচ্ছে কাজটি পড়াশোনা বা লার্নিং রিলেটেড কি না
+    const studyKeywords = ['study', 'learn', 'read', 'chapter', 'math', 'physics', 'course', 'পড়া', 'শিখলাম', 'অধ্যায়', 'গণিত'];
+    const titleLower = task.title.toLowerCase();
+    const isStudyTask = studyKeywords.some(keyword => titleLower.includes(keyword));
+
+    if (isStudyTask) {
+      const intervals = [1, 3, 7, 14]; // ১ দিন, ৩ দিন, ৭ দিন এবং ১৪ দিন পর
+      const recallTasks = intervals.map(days => {
+        const recallDate = new Date();
+        recallDate.setDate(recallDate.getDate() + days);
+        return {
+          user: user._id,
+          title: `🧠 Active Recall: ${task.title}`,
+          scheduledDate: recallDate,
+          timeBlock: task.timeBlock,
+          category: 'work',
+          priorityColor: 'blue',
+          estimatedMinutes: 5,
+          isTwoMinuteTask: true,
+          aiMotivationalNote: `Spaced Retrieval (Day ${days}). No books! Use Ghost Protocol to test your memory. 🕵️‍♂️`
+        };
+      });
+      // ডাটাবেসে একসাথে ৪টি রিভিশন টাস্ক ইনসার্ট করা হলো
+      await Task.insertMany(recallTasks);
+    }
+
     res.json({
       message: task.aiMotivationalNote,
-      triggerConfetti: true, // ফ্রন্টএন্ডে বেলুন/কনফেটি ওড়ানোর সিগন্যাল
+      triggerConfetti: true,
       pointsEarned,
       currentPoints: user.awarenessPoints,
       companion: user.companion,
       lifelines: user.lifelines,
-      task
+      task,
+      spacedRetrievalTriggered: isStudyTask // ফ্রন্টএন্ডকে জানিয়ে দেওয়া হলো
     });
   } catch (error) {
     res.status(500).json({ message: 'কাজ সম্পন্ন করতে সমস্যা হয়েছে', error: error.message });
