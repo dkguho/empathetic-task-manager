@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Sparkles, Brain, BatteryWarning, BatteryCharging, BatteryFull,
-  Clock, CheckCircle2, Bot, Play, Pause, RotateCcw,
+  Clock, CheckCircle2, Bot, Play, Pause, RotateCcw, Trophy, 
   Plus, Sun, CloudSun, Moon, Infinity as AnyTimeIcon, BarChart3, Zap,
   Droplets, Heart, Fish, Trash2, Bell, BellRing, Volume2, LogOut
 } from 'lucide-react';
@@ -51,6 +51,36 @@ const [todayStr, setTodayStr] = useState('');
   const totalTime = timerMinutes * 60;
   const [timeLeft, setTimeLeft] = useState(totalTime);
   const [isRunning, setIsRunning] = useState(false);
+
+  const [focusingTask, setFocusingTask] = useState(null); // কোন কাজটা করা হচ্ছে
+  const [pauseCount, setPauseCount] = useState(0); // কয়বার পজ করা হয়েছে
+
+  // NEW: কোনো নির্দিষ্ট কাজের জন্য ফোকাস শুরু করা
+  const startFocusForTask = (task) => {
+    const mins = prompt(`"${task.title}" করার জন্য কত মিনিট ফোকাস করতে চাও? (যেমন: 25, 45)`, 25);
+    if (mins && !isNaN(mins) && Number(mins) > 0) {
+      setFocusingTask(task);
+      setTimerMinutes(Number(mins));
+      setTimeLeft(Number(mins) * 60);
+      setIsRunning(true);
+      setPauseCount(0); // নতুন সেশনে পজ লিমিট রিসেট হবে
+      window.scrollTo({ top: 0, behavior: 'smooth' }); // টাইমার দেখার জন্য স্ক্রিন উপরে যাবে
+    }
+  };
+
+  // NEW: স্ট্রিক্ট পজ লিমিট লজিক (Max 1 Pause)
+  const handlePauseToggle = () => {
+    if (isRunning) {
+      if (pauseCount >= 1) {
+        alert("🚨 Emergency Limit Reached! তুমি ইতিমধ্যে একবার পজ করেছ। ফোকাস ভাঙা যাবে না, কাজ চালিয়ে যাও!");
+        return;
+      }
+      setIsRunning(false);
+      setPauseCount(1); // ১ বার পজ করা হলো
+    } else {
+      setIsRunning(true); // আবার শুরু
+    }
+  };
 
   // NEW: Timer Edit Handler
   const handleEditTimer = () => {
@@ -496,6 +526,10 @@ const [todayStr, setTodayStr] = useState('');
                                     <p className="text-xs text-[#646477] m-0">{task.aiMotivationalNote}</p>
                                   </div>
                                   <div className="flex items-center gap-2 shrink-0">
+                                    {/* NEW: Focus/Play Button */}
+                                    <button onClick={() => startFocusForTask(task)} className="w-9 h-9 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-600 shadow-sm hover:scale-105" title="Start Focus Mode">
+                                      <Play className="w-4 h-4 ml-0.5" />
+                                    </button>
                                     <button onClick={() => snoozeTask15Min(task._id)} className="w-9 h-9 rounded-full bg-white/80 hover:bg-white border border-white flex items-center justify-center text-[#646477] hover:text-[#1e1e2d] shadow-sm"><Clock className="w-4 h-4" /></button>
                                     <button onClick={() => breakdownTaskWithAI(task._id)} className="w-9 h-9 rounded-full bg-white/80 hover:bg-white border border-white flex items-center justify-center text-[#a18cd1] shadow-sm hover:scale-105"><Bot className="w-4 h-4" /></button>
                                     <button onClick={() => triggerReschedule(task._id)} className="px-3 py-1.5 rounded-full bg-white/80 hover:bg-white border border-white text-xs font-bold text-[#646477] shadow-sm">Delay ({3 - task.rescheduleCount})</button>
@@ -586,36 +620,59 @@ const [todayStr, setTodayStr] = useState('');
               </button>
             </div>
 
-            <div className="bento-box p-6 text-center">
-              <div className="flex items-center justify-between mb-4">
+            <div className="bento-box p-6 text-center relative overflow-hidden">
+              <div className="flex items-center justify-between mb-4 relative z-10">
                 <div className="flex items-center gap-2 m-0">
-  <h5 className="text-base font-extrabold text-[#1e1e2d] flex items-center gap-2 m-0">
-    <Clock className="w-5 h-5 text-[#a18cd1]" />
-    <span>Focus Timer</span>
-  </h5>
-  <button onClick={handleEditTimer} className="text-xs px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full font-bold transition-all ml-1">
-    Edit ✏️
-  </button>
-</div>
-                <button onClick={playAlarmSound} className="text-xs font-bold text-purple-600 hover:text-purple-800 flex items-center gap-1"><Volume2 className="w-4 h-4" /> Test Sound</button>
+                  <h5 className="text-base font-extrabold text-[#1e1e2d] flex items-center gap-2 m-0">
+                    <Clock className="w-5 h-5 text-[#a18cd1]" />
+                    <span>{focusingTask ? 'Deep Focus Mode' : 'Focus Timer'}</span>
+                  </h5>
+                  <button onClick={handleEditTimer} className="text-xs px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full font-bold transition-all ml-1">
+                    Edit ✏️
+                  </button>
+                </div>
+                <button onClick={playAlarmSound} className="text-xs font-bold text-purple-600 hover:text-purple-800 flex items-center gap-1">
+                  <Volume2 className="w-4 h-4" /> Test Sound
+                </button>
               </div>
 
-              <div className="relative w-[170px] h-[170px] mx-auto mb-4 flex items-center justify-center">
+              {/* NEW: বর্তমানে কোন কাজটা করা হচ্ছে তা দেখাবে */}
+              {focusingTask && (
+                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 mb-5 text-sm font-extrabold text-indigo-700 shadow-inner">
+                  🎯 {focusingTask.title}
+                </motion.div>
+              )}
+
+              <div className="relative w-[170px] h-[170px] mx-auto mb-4 flex items-center justify-center z-10">
                 <svg className="-rotate-90 w-full h-full" viewBox="0 0 180 180">
                   <defs>
-                    <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#a18cd1" /><stop offset="100%" stopColor="#fbc2eb" /></linearGradient>
+                    <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#a18cd1" />
+                      <stop offset="100%" stopColor="#fbc2eb" />
+                    </linearGradient>
                   </defs>
                   <circle cx="90" cy="90" r="80" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="8" />
                   <circle cx="90" cy="90" r="80" fill="none" stroke="url(#timerGradient)" strokeWidth="8" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={strokeOffset} style={{ transition: 'stroke-dashoffset 1s linear' }} />
                 </svg>
-                <div className="absolute text-3xl font-extrabold text-[#1e1e2d] tabular-nums">{formatTimer(timeLeft)}</div>
+                <div className="absolute text-3xl font-extrabold text-[#1e1e2d] tabular-nums">
+                  {formatTimer(timeLeft)}
+                </div>
               </div>
 
-              <div className="flex justify-center gap-3">
-                <button onClick={() => setIsRunning(!isRunning)} className="w-12 h-12 rounded-full bg-white/80 hover:bg-white border border-white flex items-center justify-center text-[#a18cd1] shadow-sm transition-all hover:scale-105">
-                  {isRunning ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 fill-current" />}
+              <div className="flex justify-center gap-3 relative z-10">
+                {/* NEW: Advanced Pause Button (Max 1 Pause) */}
+                <button onClick={handlePauseToggle} className="w-12 h-12 rounded-full bg-white/80 hover:bg-white border border-white flex items-center justify-center text-[#a18cd1] shadow-sm transition-all hover:scale-105">
+                  {isRunning ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
                 </button>
-                <button onClick={() => { setIsRunning(false); setTimeLeft(totalTime); }} className="w-12 h-12 rounded-full bg-white/80 hover:bg-white border border-white flex items-center justify-center text-[#646477] shadow-sm hover:scale-105"><RotateCcw className="w-5 h-5" /></button>
+                
+                {/* Emergency Reset Button */}
+                <button 
+                  onClick={() => { setIsRunning(false); setTimeLeft(totalTime); setFocusingTask(null); setPauseCount(0); }} 
+                  className="w-12 h-12 rounded-full bg-rose-50 hover:bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-500 shadow-sm hover:scale-105 transition-all"
+                  title="Emergency Exit (Cancel Session)"
+                >
+                  <RotateCcw className="w-5 h-5" />
+                </button>
               </div>
             </div>
           </div>
