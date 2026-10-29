@@ -93,3 +93,27 @@ exports.toggleSickMode = async (req, res) => {
     res.status(500).json({ message: 'সিক মোড পরিবর্তন করতে সমস্যা হয়েছে', error: error.message });
   }
 };
+
+exports.updateSettings = async (req, res) => {
+  try {
+    const { name, password, timezone } = req.body;
+    const user = await User.findById(req.user._id);
+
+    if (name) user.name = name;
+    if (timezone) user.timezone = timezone;
+    if (password) {
+      const salt = await bcrypt.genSalt(10);
+      user.password = await bcrypt.hash(password, salt);
+    }
+
+    await user.save();
+    
+    // পাসওয়ার্ড বাদে বাকি ডেটা ফ্রন্টএন্ডে পাঠানো হচ্ছে
+    res.json({ 
+      message: 'সেটিংস সফলভাবে আপডেট হয়েছে!', 
+      user: { _id: user._id, name: user.name, email: user.email, timezone: user.timezone } 
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'সেটিংস আপডেট করতে সমস্যা হয়েছে', error: error.message });
+  }
+};

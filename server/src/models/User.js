@@ -23,6 +23,10 @@ const userSchema = new mongoose.Schema({
     mood: { type: String, enum: ['happy', 'neutral', 'sad', 'sleeping'], default: 'neutral' },
     growthStage: { type: Number, default: 1 } // কাজ করলে গাছ বড় হবে বা ফুল ফুটবে (১ থেকে ৫)
   },
+  timezone: {
+    type: String,
+    default: '' // ডিফল্টভাবে ফাঁকা থাকবে, ক্লায়েন্ট থেকে সেট হবে
+  },
 
   // ৬. ক্যালেন্ডার সিঙ্ক
   googleCalendarToken: { type: String, default: null }

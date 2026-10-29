@@ -57,6 +57,18 @@ export const useAuthStore = create((set) => ({
       return false;
     }
   },
+  updateUserSettings: async (settingsData) => {
+        try {
+          const res = await apiClient.patch('/users/settings', settingsData);
+          set({ user: res.data.user });
+          return { success: true, message: res.data.message };
+        } catch (error) {
+          return { 
+            success: false, 
+            message: error.response?.data?.message || 'Settings update failed' 
+          };
+        }
+      },
 
   logout: () => {
     localStorage.removeItem('token');

@@ -9,7 +9,7 @@ import {
   Clock, CheckCircle2, Bot, Play, Pause, RotateCcw, Trophy, 
   Plus, Sun, CloudSun, Moon, Infinity as AnyTimeIcon, BarChart3, Zap,
   Droplets, Heart, Fish, Trash2, Bell, BellRing, Volume2, LogOut,
-  CalendarDays, ChevronLeft, ChevronRight, ShieldAlert
+  CalendarDays, ChevronLeft, ChevronRight, ShieldAlert, Settings
 } from 'lucide-react';
 import { useTaskStore } from '@/store/useTaskStore';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -17,7 +17,7 @@ import SpiritCompanion3D from '@/components/companion/SpiritCompanion3D';
 
 export default function EmpatheticDashboard() {
   const router = useRouter();
-  const { user, initAuth, logout } = useAuthStore();
+  const { user, initAuth, logout, updateUserSettings } = useAuthStore();
   const {
     awarenessPoints, lifelines, energyLevel, sickMode, companion,
     tasks, doneList, twoMinutePopupTask, delayReasonModalTask,
@@ -31,10 +31,10 @@ export default function EmpatheticDashboard() {
 
   const [activeTab, setActiveTab] = useState('tasks');
   const [dateFilter, setDateFilter] = useState('today');
-  // FIXED: Vercel বিল্ড ক্র্যাশ এড়াতে new Date() রিমুভ করা হলো
   const [currentMonth, setCurrentMonth] = useState(null); 
   const [todayStr, setTodayStr] = useState('');
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(null);
+  
   const [smartInput, setSmartInput] = useState('');
   const [selectedTimeOfDay, setSelectedTimeOfDay] = useState('auto');
   const [exactTimeInput, setExactTimeInput] = useState('');
@@ -51,6 +51,22 @@ export default function EmpatheticDashboard() {
   const [showGhostModal, setShowGhostModal] = useState(false);
   const [ghostInputText, setGhostInputText] = useState('');
   const [ghostAnswerText, setGhostAnswerText] = useState('');
+
+  // Settings Modal State
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [settingsForm, setSettingsForm] = useState({ name: user?.name || '', password: '', timezone: user?.timezone || '' });
+  const [isSettingsLoading, setIsSettingsLoading] = useState(false);
+
+  // 🌍 SMART TIMEZONE HELPER
+  const getUserTimezone = () => user?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  
+  const getTzDateStr = () => {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: getUserTimezone(), year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  };
+  
+  const getTzTimeStr = () => {
+    return new Intl.DateTimeFormat('en-GB', { timeZone: getUserTimezone(), hour: '2-digit', minute: '2-digit' }).format(new Date());
+  };
 
   // Editable Timer State
   const [timerMinutes, setTimerMinutes] = useState(25);
@@ -76,7 +92,7 @@ export default function EmpatheticDashboard() {
   const handlePauseToggle = () => {
     if (isRunning) {
       if (pauseCount >= 1) {
-        alert("🚨 Emergency Limit Reached! তুমি ইতিমধ্যে একবার পজ করেছ। ফোকাস ভাঙা যাবে না, কাজ চালিয়ে যাও!");
+        alert("🚨 Emergency Limit Reached! তুমি ইতিমধ্যে একবার পজ করেছ। ফোকাস ভাঙা যাবে 편집, কাজ চালিয়ে যাও!");
         return;
       }
       setIsRunning(false);
@@ -95,6 +111,7 @@ export default function EmpatheticDashboard() {
       setIsRunning(false); 
     }
   };
+  
   const circumference = 2 * Math.PI * 80;
 
   useEffect(() => {
@@ -106,14 +123,12 @@ export default function EmpatheticDashboard() {
   }, [initAuth, fetchTasks]);
 
   useEffect(() => {
-    const now = new Date();
-    const dateStr = now.toISOString().split('T')[0];
-    
-    setTodayStr(dateStr);
-    setSelectedDateInput(dateStr);
+    const tzDate = getTzDateStr();
+    setTodayStr(tzDate);
+    setSelectedDateInput(tzDate);
     setExactTimeInput(''); 
-    setCurrentMonth(now); // NEW: ক্লায়েন্ট সাইডে ক্যালেন্ডারের তারিখ সেট হবে
-  }, []);
+    setCurrentMonth(new Date()); 
+  }, [user?.timezone]); 
 
   const playAlarmSound = () => {
     try {
@@ -155,16 +170,13 @@ export default function EmpatheticDashboard() {
 
   useEffect(() => {
     const checkTaskAlarms = () => {
-      const now = new Date();
-      const currentHours = String(now.getHours()).padStart(2, '0');
-      const currentMinutes = String(now.getMinutes()).padStart(2, '0');
-      const currentTimeStr = `${currentHours}:${currentMinutes}`;
-      const todayStr = now.toISOString().split('T')[0];
+      const currentTimeStr = getTzTimeStr();
+      const currentTodayStr = getTzDateStr();
 
       tasks.forEach((task) => {
         if (!task.exactTime) return;
-        const dateMatches = !task.date || task.date === todayStr;
-        const alarmKey = `${task._id}-${task.date || todayStr}-${task.exactTime}`;
+        const dateMatches = !task.date || task.date === currentTodayStr;
+        const alarmKey = `${task._id}-${task.date || currentTodayStr}-${task.exactTime}`;
 
         if (dateMatches && task.exactTime === currentTimeStr && !triggeredAlarmsRef.current.has(alarmKey)) {
           triggeredAlarmsRef.current.add(alarmKey);
@@ -183,7 +195,7 @@ export default function EmpatheticDashboard() {
     const alarmInterval = setInterval(checkTaskAlarms, 10000);
     checkTaskAlarms();
     return () => clearInterval(alarmInterval);
-  }, [tasks, notifPermission]);
+  }, [tasks, notifPermission, user?.timezone]);
 
   useEffect(() => {
     let interval = null;
@@ -316,13 +328,22 @@ export default function EmpatheticDashboard() {
               <h1 className="text-2xl sm:text-3xl font-extrabold text-[#1e1e2d] m-0">
                 স্বাগতম, {user?.name || 'গেস্ট'}! 👋
               </h1>
-              <button
-                onClick={handleLogout}
-                className="w-8 h-8 rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-500 hover:bg-rose-500 hover:text-white transition-all shadow-sm"
-                title="Logout Account"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowSettingsModal(true)}
+                  className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-purple-100 hover:text-purple-600 transition-all shadow-sm"
+                  title="Account Settings"
+                >
+                  <Settings className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="w-8 h-8 rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-500 hover:bg-rose-500 hover:text-white transition-all shadow-sm"
+                  title="Logout Account"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
             </div>
             <p className="text-[#646477] font-medium text-sm sm:text-base">
               {energyLevel === 'low'
@@ -591,7 +612,6 @@ export default function EmpatheticDashboard() {
               ) : activeTab === 'calendar' ? (
                 <motion.div key="calendar-tab" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} className="bento-box p-6 sm:p-8 space-y-6">
                   {!currentMonth ? (
-                    // Vercel Hydration Mismatch এড়ানোর জন্য সেফটি ফলব্যাক
                     <div className="text-center py-10 text-slate-500 font-bold animate-pulse">Loading Calendar... 🗓️</div>
                   ) : (
                     <>
@@ -604,7 +624,6 @@ export default function EmpatheticDashboard() {
                           <p className="text-sm text-[#646477] mt-1">Smart Spaced Retrieval Planner 🧠</p>
                         </div>
                         
-                        {/* Month Navigation */}
                         <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-2xl border border-slate-200">
                           <button 
                             onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
@@ -624,7 +643,6 @@ export default function EmpatheticDashboard() {
                         </div>
                       </div>
 
-                      {/* Calendar Grid */}
                       <div className="grid grid-cols-7 gap-2 sm:gap-3">
                         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
                           <div key={day} className="text-center text-xs font-extrabold text-[#646477] py-2 uppercase tracking-widest">
@@ -640,7 +658,6 @@ export default function EmpatheticDashboard() {
                           const day = i + 1;
                           const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                           
-                          // Count tasks for this specific day
                           const dayTasks = tasks.filter(t => {
                             const tDate = (t.scheduledDate || t.date) ? new Date(t.scheduledDate || t.date).toISOString().split('T')[0] : null;
                             return tDate === dateStr;
@@ -652,7 +669,7 @@ export default function EmpatheticDashboard() {
                           return (
                             <div 
                               key={day} 
-                              onClick={() => setSelectedCalendarDate(dateStr)} // NEW: ক্লিক করলে ডেট সেভ হবে
+                              onClick={() => setSelectedCalendarDate(dateStr)} 
                               className={`relative flex flex-col items-center justify-start p-2 sm:p-3 min-h-[80px] rounded-2xl border transition-all cursor-pointer hover:shadow-md hover:-translate-y-0.5 ${
                                 isToday ? 'bg-purple-50 border-purple-300 shadow-sm' : 'bg-white/60 border-slate-100 hover:border-purple-200'
                               } ${isOverloaded ? 'ring-2 ring-rose-300 bg-rose-50/50' : ''}`}
@@ -667,7 +684,6 @@ export default function EmpatheticDashboard() {
                                     {dayTasks.length} Tasks
                                   </span>
                                   
-                                  {/* Spaced Retrieval dots */}
                                   <div className="flex gap-0.5 mt-1 flex-wrap justify-center">
                                     {dayTasks.slice(0, 5).map((t, idx) => (
                                       <span key={idx} className={`w-1.5 h-1.5 rounded-full ${t.title.includes('Recall') ? 'bg-indigo-500' : 'bg-sky-400'}`} />
@@ -677,7 +693,6 @@ export default function EmpatheticDashboard() {
                                 </div>
                               )}
 
-                              {/* Overload Alert Icon */}
                               {isOverloaded && (
                                 <div className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shadow-sm" title="Overload Alert: Too many tasks!">
                                   <ShieldAlert className="w-3 h-3" />
@@ -979,7 +994,7 @@ export default function EmpatheticDashboard() {
           </motion.div>
         )}
       </AnimatePresence>
-      {/* NEW: Calendar Date Details Modal */}
+
       <AnimatePresence>
         {selectedCalendarDate && (
           <motion.div
@@ -987,7 +1002,7 @@ export default function EmpatheticDashboard() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
-            onClick={() => setSelectedCalendarDate(null)} // ব্যাকগ্রাউন্ডে ক্লিক করলে মোডাল বন্ধ হবে
+            onClick={() => setSelectedCalendarDate(null)} 
           >
             <motion.div
               initial={{ scale: 0.9, y: 20 }}
@@ -1057,6 +1072,100 @@ export default function EmpatheticDashboard() {
                     </div>
                   ));
                 })()}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ⚙️ Account & Region Settings Modal */}
+      <AnimatePresence>
+        {showSettingsModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="bento-box bg-white max-w-md w-full p-6 sm:p-8 space-y-6 border-2 border-slate-200 shadow-2xl"
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
+                  <Settings className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-extrabold text-[#1e1e2d] m-0">Account Settings</h3>
+                  <p className="text-xs font-bold text-slate-500 m-0">Update your profile and world clock</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1.5">Display Name</label>
+                  <input 
+                    type="text" 
+                    value={settingsForm.name} 
+                    onChange={(e) => setSettingsForm({...settingsForm, name: e.target.value})}
+                    className="w-full rounded-xl bg-slate-50 border border-slate-200 p-3 text-sm text-[#1e1e2d] outline-none focus:border-purple-400 focus:bg-white transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1.5">New Password (leave blank to keep current)</label>
+                  <input 
+                    type="password" 
+                    placeholder="••••••••"
+                    value={settingsForm.password} 
+                    onChange={(e) => setSettingsForm({...settingsForm, password: e.target.value})}
+                    className="w-full rounded-xl bg-slate-50 border border-slate-200 p-3 text-sm text-[#1e1e2d] outline-none focus:border-purple-400 focus:bg-white transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1.5">World Clock (Timezone)</label>
+                  <select 
+                    value={settingsForm.timezone || getUserTimezone()} 
+                    onChange={(e) => setSettingsForm({...settingsForm, timezone: e.target.value})}
+                    className="w-full rounded-xl bg-slate-50 border border-slate-200 p-3 text-sm text-[#1e1e2d] outline-none focus:border-purple-400 focus:bg-white transition-all font-semibold"
+                  >
+                    <option value={Intl.DateTimeFormat().resolvedOptions().timeZone}>📍 System Default ({Intl.DateTimeFormat().resolvedOptions().timeZone})</option>
+                    <option value="America/Detroit">🇺🇸 US Eastern (Detroit)</option>
+                    <option value="America/New_York">🇺🇸 US Eastern (New York)</option>
+                    <option value="Asia/Dhaka">🇧🇩 Bangladesh (Dhaka)</option>
+                    <option value="Europe/London">🇬🇧 UK (London)</option>
+                    <option value="Asia/Dubai">🇦🇪 UAE (Dubai)</option>
+                    <option value="Australia/Sydney">🇦🇺 Australia (Sydney)</option>
+                    <option value="UTC">🌐 Coordinated Universal Time (UTC)</option>
+                  </select>
+                  <p className="text-[10px] font-bold text-slate-400 mt-1.5">
+                    Alarms, task planning, and notifications will strictly follow this region&apos;s time.
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => setShowSettingsModal(false)}
+                    className="btn-glass-pill px-5 py-2.5 text-xs font-bold flex-1"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setIsSettingsLoading(true);
+                      const res = await updateUserSettings(settingsForm);
+                      setIsSettingsLoading(false);
+                      if(res.success) setShowSettingsModal(false);
+                      else alert(res.message);
+                    }}
+                    disabled={isSettingsLoading}
+                    className="btn-premium flex-1 py-2.5 text-xs justify-center flex items-center gap-2"
+                  >
+                    {isSettingsLoading ? 'Saving...' : 'Save Settings ✨'}
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>
