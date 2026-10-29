@@ -34,7 +34,7 @@ export default function EmpatheticDashboard() {
   // FIXED: Vercel বিল্ড ক্র্যাশ এড়াতে new Date() রিমুভ করা হলো
   const [currentMonth, setCurrentMonth] = useState(null); 
   const [todayStr, setTodayStr] = useState('');
-  
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState(null);
   const [smartInput, setSmartInput] = useState('');
   const [selectedTimeOfDay, setSelectedTimeOfDay] = useState('auto');
   const [exactTimeInput, setExactTimeInput] = useState('');
@@ -652,7 +652,8 @@ export default function EmpatheticDashboard() {
                           return (
                             <div 
                               key={day} 
-                              className={`relative flex flex-col items-center justify-start p-2 sm:p-3 min-h-[80px] rounded-2xl border transition-all ${
+                              onClick={() => setSelectedCalendarDate(dateStr)} // NEW: ক্লিক করলে ডেট সেভ হবে
+                              className={`relative flex flex-col items-center justify-start p-2 sm:p-3 min-h-[80px] rounded-2xl border transition-all cursor-pointer hover:shadow-md hover:-translate-y-0.5 ${
                                 isToday ? 'bg-purple-50 border-purple-300 shadow-sm' : 'bg-white/60 border-slate-100 hover:border-purple-200'
                               } ${isOverloaded ? 'ring-2 ring-rose-300 bg-rose-50/50' : ''}`}
                             >
@@ -974,6 +975,89 @@ export default function EmpatheticDashboard() {
                   )}
                 </motion.div>
               )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {/* NEW: Calendar Date Details Modal */}
+      <AnimatePresence>
+        {selectedCalendarDate && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setSelectedCalendarDate(null)} // ব্যাকগ্রাউন্ডে ক্লিক করলে মোডাল বন্ধ হবে
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bento-box bg-white/95 max-w-lg w-full p-6 sm:p-8 space-y-6 max-h-[85vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-slate-200/60 pb-4">
+                <div>
+                  <h3 className="text-xl font-extrabold text-[#1e1e2d] flex items-center gap-2">
+                    <CalendarDays className="w-6 h-6 text-[#a18cd1]" />
+                    {new Date(selectedCalendarDate).toLocaleDateString('default', { weekday: 'long', month: 'long', day: 'numeric' })}
+                  </h3>
+                  <p className="text-xs font-bold text-[#646477] mt-1">Daily Task Overview</p>
+                </div>
+                <button 
+                  onClick={() => setSelectedCalendarDate(null)} 
+                  className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-all font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {(() => {
+                  const dayTasks = tasks.filter(t => {
+                    const tDate = (t.scheduledDate || t.date) ? new Date(t.scheduledDate || t.date).toISOString().split('T')[0] : null;
+                    return tDate === selectedCalendarDate;
+                  });
+
+                  if (dayTasks.length === 0) {
+                    return (
+                      <div className="text-center py-8 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                        <p className="text-slate-500 font-bold text-sm">No tasks scheduled for this day! 🌱</p>
+                      </div>
+                    );
+                  }
+
+                  return dayTasks.map((task) => (
+                    <div key={task._id} className="bg-slate-50 border border-slate-100 rounded-xl p-3 sm:p-4 flex items-start gap-3 transition-all hover:border-purple-200 hover:bg-white hover:shadow-sm">
+                      <div className="mt-0.5">
+                        {task.title.includes('Recall') ? (
+                          <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0 shadow-sm" title="Active Recall Session">
+                            <Brain className="w-4 h-4" />
+                          </div>
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center shrink-0 shadow-sm">
+                            <Sparkles className="w-4 h-4" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-sm text-[#1e1e2d] leading-tight mb-1.5">{task.title}</p>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {renderPriorityBadge(task)}
+                          {task.exactTime && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-200">
+                              ⏰ {task.exactTime}
+                            </span>
+                          )}
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600 capitalize">
+                            {task.timeBlock}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
             </motion.div>
           </motion.div>
         )}
