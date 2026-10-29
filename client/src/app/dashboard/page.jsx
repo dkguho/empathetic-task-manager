@@ -31,7 +31,8 @@ export default function EmpatheticDashboard() {
 
   const [activeTab, setActiveTab] = useState('tasks');
   const [dateFilter, setDateFilter] = useState('today');
-  const [currentMonth, setCurrentMonth] = useState(new Date());
+  // FIXED: Vercel বিল্ড ক্র্যাশ এড়াতে new Date() রিমুভ করা হলো
+  const [currentMonth, setCurrentMonth] = useState(null); 
   const [todayStr, setTodayStr] = useState('');
   
   const [smartInput, setSmartInput] = useState('');
@@ -111,6 +112,7 @@ export default function EmpatheticDashboard() {
     setTodayStr(dateStr);
     setSelectedDateInput(dateStr);
     setExactTimeInput(''); 
+    setCurrentMonth(now); // NEW: ক্লায়েন্ট সাইডে ক্যালেন্ডারের তারিখ সেট হবে
   }, []);
 
   const playAlarmSound = () => {
@@ -588,98 +590,110 @@ export default function EmpatheticDashboard() {
                 </motion.div>
               ) : activeTab === 'calendar' ? (
                 <motion.div key="calendar-tab" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} className="bento-box p-6 sm:p-8 space-y-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-2xl font-extrabold text-[#1e1e2d] flex items-center gap-2">
-                        <CalendarDays className="w-7 h-7 text-[#a18cd1]" />
-                        <span>Monthly Overview</span>
-                      </h2>
-                      <p className="text-sm text-[#646477] mt-1">Smart Spaced Retrieval Planner 🧠</p>
-                    </div>
-                    
-                    <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-2xl border border-slate-200">
-                      <button 
-                        onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
-                        className="p-1.5 rounded-full hover:bg-slate-200 transition-all text-slate-600"
-                      >
-                        <ChevronLeft className="w-5 h-5" />
-                      </button>
-                      <span className="font-extrabold text-[#1e1e2d] min-w-[120px] text-center">
-                        {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
-                      </span>
-                      <button 
-                        onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
-                        className="p-1.5 rounded-full hover:bg-slate-200 transition-all text-slate-600"
-                      >
-                        <ChevronRight className="w-5 h-5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-7 gap-2 sm:gap-3">
-                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                      <div key={day} className="text-center text-xs font-extrabold text-[#646477] py-2 uppercase tracking-widest">
-                        {day}
-                      </div>
-                    ))}
-                    
-                    {Array.from({ length: new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay() }).map((_, i) => (
-                      <div key={`blank-${i}`} className="p-3 bg-transparent rounded-2xl" />
-                    ))}
-
-                    {Array.from({ length: new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate() }).map((_, i) => {
-                      const day = i + 1;
-                      const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                      
-                      const dayTasks = tasks.filter(t => {
-                        const tDate = (t.scheduledDate || t.date) ? new Date(t.scheduledDate || t.date).toISOString().split('T')[0] : null;
-                        return tDate === dateStr;
-                      });
-                      
-                      const isToday = dateStr === todayStr;
-                      const isOverloaded = dayTasks.length >= 8; 
-
-                      return (
-                        <div 
-                          key={day} 
-                          className={`relative flex flex-col items-center justify-start p-2 sm:p-3 min-h-[80px] rounded-2xl border transition-all ${
-                            isToday ? 'bg-purple-50 border-purple-300 shadow-sm' : 'bg-white/60 border-slate-100 hover:border-purple-200'
-                          } ${isOverloaded ? 'ring-2 ring-rose-300 bg-rose-50/50' : ''}`}
-                        >
-                          <span className={`text-sm font-extrabold ${isToday ? 'text-purple-700' : 'text-[#1e1e2d]'}`}>
-                            {day}
+                  {!currentMonth ? (
+                    // Vercel Hydration Mismatch এড়ানোর জন্য সেফটি ফলব্যাক
+                    <div className="text-center py-10 text-slate-500 font-bold animate-pulse">Loading Calendar... 🗓️</div>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h2 className="text-2xl font-extrabold text-[#1e1e2d] flex items-center gap-2">
+                            <CalendarDays className="w-7 h-7 text-[#a18cd1]" />
+                            <span>Monthly Overview</span>
+                          </h2>
+                          <p className="text-sm text-[#646477] mt-1">Smart Spaced Retrieval Planner 🧠</p>
+                        </div>
+                        
+                        {/* Month Navigation */}
+                        <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-2xl border border-slate-200">
+                          <button 
+                            onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
+                            className="p-1.5 rounded-full hover:bg-slate-200 transition-all text-slate-600"
+                          >
+                            <ChevronLeft className="w-5 h-5" />
+                          </button>
+                          <span className="font-extrabold text-[#1e1e2d] min-w-[120px] text-center">
+                            {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
                           </span>
+                          <button 
+                            onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
+                            className="p-1.5 rounded-full hover:bg-slate-200 transition-all text-slate-600"
+                          >
+                            <ChevronRight className="w-5 h-5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Calendar Grid */}
+                      <div className="grid grid-cols-7 gap-2 sm:gap-3">
+                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                          <div key={day} className="text-center text-xs font-extrabold text-[#646477] py-2 uppercase tracking-widest">
+                            {day}
+                          </div>
+                        ))}
+                        
+                        {Array.from({ length: new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay() }).map((_, i) => (
+                          <div key={`blank-${i}`} className="p-3 bg-transparent rounded-2xl" />
+                        ))}
+
+                        {Array.from({ length: new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate() }).map((_, i) => {
+                          const day = i + 1;
+                          const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                           
-                          {dayTasks.length > 0 && (
-                            <div className="mt-1 w-full flex flex-col items-center gap-1">
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 w-full text-center truncate">
-                                {dayTasks.length} Tasks
+                          // Count tasks for this specific day
+                          const dayTasks = tasks.filter(t => {
+                            const tDate = (t.scheduledDate || t.date) ? new Date(t.scheduledDate || t.date).toISOString().split('T')[0] : null;
+                            return tDate === dateStr;
+                          });
+                          
+                          const isToday = dateStr === todayStr;
+                          const isOverloaded = dayTasks.length >= 8; 
+
+                          return (
+                            <div 
+                              key={day} 
+                              className={`relative flex flex-col items-center justify-start p-2 sm:p-3 min-h-[80px] rounded-2xl border transition-all ${
+                                isToday ? 'bg-purple-50 border-purple-300 shadow-sm' : 'bg-white/60 border-slate-100 hover:border-purple-200'
+                              } ${isOverloaded ? 'ring-2 ring-rose-300 bg-rose-50/50' : ''}`}
+                            >
+                              <span className={`text-sm font-extrabold ${isToday ? 'text-purple-700' : 'text-[#1e1e2d]'}`}>
+                                {day}
                               </span>
                               
-                              <div className="flex gap-0.5 mt-1 flex-wrap justify-center">
-                                {dayTasks.slice(0, 5).map((t, idx) => (
-                                  <span key={idx} className={`w-1.5 h-1.5 rounded-full ${t.title.includes('Recall') ? 'bg-indigo-500' : 'bg-sky-400'}`} />
-                                ))}
-                                {dayTasks.length > 5 && <span className="text-[8px] font-bold text-slate-400">+{dayTasks.length - 5}</span>}
-                              </div>
-                            </div>
-                          )}
+                              {dayTasks.length > 0 && (
+                                <div className="mt-1 w-full flex flex-col items-center gap-1">
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 w-full text-center truncate">
+                                    {dayTasks.length} Tasks
+                                  </span>
+                                  
+                                  {/* Spaced Retrieval dots */}
+                                  <div className="flex gap-0.5 mt-1 flex-wrap justify-center">
+                                    {dayTasks.slice(0, 5).map((t, idx) => (
+                                      <span key={idx} className={`w-1.5 h-1.5 rounded-full ${t.title.includes('Recall') ? 'bg-indigo-500' : 'bg-sky-400'}`} />
+                                    ))}
+                                    {dayTasks.length > 5 && <span className="text-[8px] font-bold text-slate-400">+{dayTasks.length - 5}</span>}
+                                  </div>
+                                </div>
+                              )}
 
-                          {isOverloaded && (
-                            <div className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shadow-sm" title="Overload Alert: Too many tasks!">
-                              <ShieldAlert className="w-3 h-3" />
+                              {/* Overload Alert Icon */}
+                              {isOverloaded && (
+                                <div className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shadow-sm" title="Overload Alert: Too many tasks!">
+                                  <ShieldAlert className="w-3 h-3" />
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  
-                  <div className="flex flex-wrap gap-4 pt-4 border-t border-slate-200/60 text-xs font-bold text-[#646477]">
-                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-sky-400" /> Regular Task</div>
-                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500" /> Active Recall (Spaced)</div>
-                    <div className="flex items-center gap-1.5"><ShieldAlert className="w-3.5 h-3.5 text-rose-500" /> Overload Alert (8+ Tasks)</div>
-                  </div>
+                          );
+                        })}
+                      </div>
+                      
+                      <div className="flex flex-wrap gap-4 pt-4 border-t border-slate-200/60 text-xs font-bold text-[#646477]">
+                        <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-sky-400" /> Regular Task</div>
+                        <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500" /> Active Recall (Spaced)</div>
+                        <div className="flex items-center gap-1.5"><ShieldAlert className="w-3.5 h-3.5 text-rose-500" /> Overload Alert (8+ Tasks)</div>
+                      </div>
+                    </>
+                  )}
                 </motion.div>
               ) : null}
             </AnimatePresence>
