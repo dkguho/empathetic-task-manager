@@ -12,6 +12,6 @@ router.post('/register', registerUser);
 router.post('/login', loginUser);
 router.post('/energy-checkin', protect, checkInEnergy);
 router.patch('/sick-mode', protect, toggleSickMode);
-router.patch('/settings', protect, require('../controllers/authController').updateSettings);
+router.patch('/settings', protect, require('../controllers/userController').updateSettings);
 
 module.exports = router;
