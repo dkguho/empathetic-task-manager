@@ -8,7 +8,8 @@ import {
   Sparkles, Brain, BatteryWarning, BatteryCharging, BatteryFull,
   Clock, CheckCircle2, Bot, Play, Pause, RotateCcw, Trophy, 
   Plus, Sun, CloudSun, Moon, Infinity as AnyTimeIcon, BarChart3, Zap,
-  Droplets, Heart, Fish, Trash2, Bell, BellRing, Volume2, LogOut
+  Droplets, Heart, Fish, Trash2, Bell, BellRing, Volume2, LogOut,
+  CalendarDays, ChevronLeft, ChevronRight, ShieldAlert
 } from 'lucide-react';
 import { useTaskStore } from '@/store/useTaskStore';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -23,12 +24,16 @@ export default function EmpatheticDashboard() {
     setEnergyLevel, toggleSickMode, setCompanionViewMode, nurtureCompanion,
     clearCompanionEffect, addSmartTask, processBrainDumpToTasks, completeTask,
     deleteTask, snoozeTask15Min, triggerReschedule, submitDelayReason, breakdownTaskWithAI,
-    toggleSubTask, closeModals, fetchTasks, clearStore, fetchGhostQuestions, ghostQuestionsData, isGhostLoading, completeGhostProtocol, clearGhostData
+    toggleSubTask, closeModals, fetchTasks, clearStore, fetchGhostQuestions, 
+    ghostQuestionsData, isGhostLoading, completeGhostProtocol, clearGhostData,
+    evaluateGhostAnswer, ghostFeedbackData, isEvaluating
   } = useTaskStore();
 
   const [activeTab, setActiveTab] = useState('tasks');
   const [dateFilter, setDateFilter] = useState('today');
-const [todayStr, setTodayStr] = useState('');
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [todayStr, setTodayStr] = useState('');
+  
   const [smartInput, setSmartInput] = useState('');
   const [selectedTimeOfDay, setSelectedTimeOfDay] = useState('auto');
   const [exactTimeInput, setExactTimeInput] = useState('');
@@ -46,16 +51,15 @@ const [todayStr, setTodayStr] = useState('');
   const [ghostInputText, setGhostInputText] = useState('');
   const [ghostAnswerText, setGhostAnswerText] = useState('');
 
-  // NEW: Editable Timer State
+  // Editable Timer State
   const [timerMinutes, setTimerMinutes] = useState(25);
   const totalTime = timerMinutes * 60;
   const [timeLeft, setTimeLeft] = useState(totalTime);
   const [isRunning, setIsRunning] = useState(false);
 
-  const [focusingTask, setFocusingTask] = useState(null); // কোন কাজটা করা হচ্ছে
-  const [pauseCount, setPauseCount] = useState(0); // কয়বার পজ করা হয়েছে
+  const [focusingTask, setFocusingTask] = useState(null); 
+  const [pauseCount, setPauseCount] = useState(0); 
 
-  // NEW: কোনো নির্দিষ্ট কাজের জন্য ফোকাস শুরু করা
   const startFocusForTask = (task) => {
     const mins = prompt(`"${task.title}" করার জন্য কত মিনিট ফোকাস করতে চাও? (যেমন: 25, 45)`, 25);
     if (mins && !isNaN(mins) && Number(mins) > 0) {
@@ -63,12 +67,11 @@ const [todayStr, setTodayStr] = useState('');
       setTimerMinutes(Number(mins));
       setTimeLeft(Number(mins) * 60);
       setIsRunning(true);
-      setPauseCount(0); // নতুন সেশনে পজ লিমিট রিসেট হবে
-      window.scrollTo({ top: 0, behavior: 'smooth' }); // টাইমার দেখার জন্য স্ক্রিন উপরে যাবে
+      setPauseCount(0); 
+      window.scrollTo({ top: 0, behavior: 'smooth' }); 
     }
   };
 
-  // NEW: স্ট্রিক্ট পজ লিমিট লজিক (Max 1 Pause)
   const handlePauseToggle = () => {
     if (isRunning) {
       if (pauseCount >= 1) {
@@ -76,27 +79,26 @@ const [todayStr, setTodayStr] = useState('');
         return;
       }
       setIsRunning(false);
-      setPauseCount(1); // ১ বার পজ করা হলো
+      setPauseCount(1); 
     } else {
-      setIsRunning(true); // আবার শুরু
+      setIsRunning(true); 
     }
   };
 
-  // NEW: Timer Edit Handler
   const handleEditTimer = () => {
     const mins = prompt("কত মিনিটের জন্য ফোকাস করতে চাও? (যেমন: 5, 25, 50)", timerMinutes);
     if (mins && !isNaN(mins) && Number(mins) > 0) {
       const newMins = Number(mins);
       setTimerMinutes(newMins);
       setTimeLeft(newMins * 60);
-      setIsRunning(false); // এডিট করলে টাইমার পজ হয়ে যাবে
+      setIsRunning(false); 
     }
   };
   const circumference = 2 * Math.PI * 80;
 
   useEffect(() => {
     if (initAuth) initAuth();
-    fetchTasks(); // <--- লগইন করলেই ক্লাউড থেকে সব টাস্ক টেনে আনবে
+    fetchTasks();
     if (typeof window !== 'undefined' && 'Notification' in window) {
       setNotifPermission(Notification.permission);
     }
@@ -108,7 +110,7 @@ const [todayStr, setTodayStr] = useState('');
     
     setTodayStr(dateStr);
     setSelectedDateInput(dateStr);
-    setExactTimeInput(''); // <--- কারেন্ট টাইমের বদলে ডিফল্টভাবে ফাঁকা থাকবে
+    setExactTimeInput(''); 
   }, []);
 
   const playAlarmSound = () => {
@@ -122,13 +124,10 @@ const [todayStr, setTodayStr] = useState('');
         const gain = ctx.createGain();
         osc.type = 'sine';
         osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.18);
-
         gain.gain.setValueAtTime(0.2, ctx.currentTime + idx * 0.18);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.18 + 0.6);
-
         osc.connect(gain);
         gain.connect(ctx.destination);
-
         osc.start(ctx.currentTime + idx * 0.18);
         osc.stop(ctx.currentTime + idx * 0.18 + 0.6);
       });
@@ -188,12 +187,11 @@ const [todayStr, setTodayStr] = useState('');
     let interval = null;
     if (isRunning && timeLeft > 0) {
       interval = setInterval(() => setTimeLeft((t) => t - 1), 1000);
-    } else if (timeLeft === 0 && isRunning) { // NEW: isRunning চেক করা হলো ডাবল-ট্রিগার বন্ধ করতে
+    } else if (timeLeft === 0 && isRunning) { 
       setIsRunning(false);
       playAlarmSound();
       firePremiumConfetti();
       
-      // NEW: মোডাল ওপেন হওয়ার আগে পুরনো সব ডেটা এবং প্রশ্ন মুছে ফ্রেশ করা হলো
       clearGhostData();
       setGhostInputText('');
       setGhostAnswerText('');
@@ -238,7 +236,7 @@ const [todayStr, setTodayStr] = useState('');
   };
 
   const handleLogout = () => {
-    clearStore(); // <--- ইউজারের পার্সোনাল ডেটা লোকাল ব্রাউজার থেকে মুছে ফেলবে
+    clearStore();
     if (logout) logout();
     router.push('/auth');
   };
@@ -267,8 +265,6 @@ const [todayStr, setTodayStr] = useState('');
 
   const visibleTasks = tasks.filter((t) => {
     if (!todayStr) return false;
-
-    // NEW: ডেটাবেস থেকে আসা scheduledDate ঠিকভাবে রিড করা
     const rawDate = t.scheduledDate || t.date;
     const taskDate = rawDate ? new Date(rawDate).toISOString().split('T')[0] : todayStr;
 
@@ -382,6 +378,15 @@ const [todayStr, setTodayStr] = useState('');
             >
               <Brain className="w-4 h-4" />
               <span>🧠 Brain Dump</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('calendar')}
+              className={`px-6 py-2.5 rounded-full text-sm font-bold flex items-center gap-2 transition-all ${
+                activeTab === 'calendar' ? 'bg-gradient-to-r from-[#a18cd1] to-[#fbc2eb] text-white shadow-md' : 'text-[#646477] hover:text-[#1e1e2d]'
+              }`}
+            >
+              <CalendarDays className="w-4 h-4" />
+              <span>🗓️ Calendar</span>
             </button>
           </div>
 
@@ -529,7 +534,6 @@ const [todayStr, setTodayStr] = useState('');
                                     <p className="text-xs text-[#646477] m-0">{task.aiMotivationalNote}</p>
                                   </div>
                                   <div className="flex items-center gap-2 shrink-0">
-                                    {/* NEW: Focus/Play Button */}
                                     <button onClick={() => startFocusForTask(task)} className="w-9 h-9 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-600 shadow-sm hover:scale-105" title="Start Focus Mode">
                                       <Play className="w-4 h-4 ml-0.5" />
                                     </button>
@@ -571,7 +575,7 @@ const [todayStr, setTodayStr] = useState('');
                     )}
                   </div>
                 </motion.div>
-              ) : (
+              ) : activeTab === 'brain-dump' ? (
                 <motion.div key="brain-dump-tab" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} className="bento-box p-6 sm:p-8 space-y-6">
                   <div>
                     <h2 className="text-2xl font-extrabold text-[#1e1e2d] flex items-center gap-2"><Brain className="w-7 h-7 text-[#fcb69f]" /><span>Nighttime Brain Dump Studio 🌙</span></h2>
@@ -582,7 +586,102 @@ const [todayStr, setTodayStr] = useState('');
                     <button onClick={handleBrainDumpSubmit} className="btn-premium px-7 py-3.5 text-sm flex items-center gap-2"><Sparkles className="w-4 h-4" /><span>Organize with AI</span></button>
                   </div>
                 </motion.div>
-              )}
+              ) : activeTab === 'calendar' ? (
+                <motion.div key="calendar-tab" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} className="bento-box p-6 sm:p-8 space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-2xl font-extrabold text-[#1e1e2d] flex items-center gap-2">
+                        <CalendarDays className="w-7 h-7 text-[#a18cd1]" />
+                        <span>Monthly Overview</span>
+                      </h2>
+                      <p className="text-sm text-[#646477] mt-1">Smart Spaced Retrieval Planner 🧠</p>
+                    </div>
+                    
+                    <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-2xl border border-slate-200">
+                      <button 
+                        onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
+                        className="p-1.5 rounded-full hover:bg-slate-200 transition-all text-slate-600"
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </button>
+                      <span className="font-extrabold text-[#1e1e2d] min-w-[120px] text-center">
+                        {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                      </span>
+                      <button 
+                        onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
+                        className="p-1.5 rounded-full hover:bg-slate-200 transition-all text-slate-600"
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-7 gap-2 sm:gap-3">
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                      <div key={day} className="text-center text-xs font-extrabold text-[#646477] py-2 uppercase tracking-widest">
+                        {day}
+                      </div>
+                    ))}
+                    
+                    {Array.from({ length: new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay() }).map((_, i) => (
+                      <div key={`blank-${i}`} className="p-3 bg-transparent rounded-2xl" />
+                    ))}
+
+                    {Array.from({ length: new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate() }).map((_, i) => {
+                      const day = i + 1;
+                      const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                      
+                      const dayTasks = tasks.filter(t => {
+                        const tDate = (t.scheduledDate || t.date) ? new Date(t.scheduledDate || t.date).toISOString().split('T')[0] : null;
+                        return tDate === dateStr;
+                      });
+                      
+                      const isToday = dateStr === todayStr;
+                      const isOverloaded = dayTasks.length >= 8; 
+
+                      return (
+                        <div 
+                          key={day} 
+                          className={`relative flex flex-col items-center justify-start p-2 sm:p-3 min-h-[80px] rounded-2xl border transition-all ${
+                            isToday ? 'bg-purple-50 border-purple-300 shadow-sm' : 'bg-white/60 border-slate-100 hover:border-purple-200'
+                          } ${isOverloaded ? 'ring-2 ring-rose-300 bg-rose-50/50' : ''}`}
+                        >
+                          <span className={`text-sm font-extrabold ${isToday ? 'text-purple-700' : 'text-[#1e1e2d]'}`}>
+                            {day}
+                          </span>
+                          
+                          {dayTasks.length > 0 && (
+                            <div className="mt-1 w-full flex flex-col items-center gap-1">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 w-full text-center truncate">
+                                {dayTasks.length} Tasks
+                              </span>
+                              
+                              <div className="flex gap-0.5 mt-1 flex-wrap justify-center">
+                                {dayTasks.slice(0, 5).map((t, idx) => (
+                                  <span key={idx} className={`w-1.5 h-1.5 rounded-full ${t.title.includes('Recall') ? 'bg-indigo-500' : 'bg-sky-400'}`} />
+                                ))}
+                                {dayTasks.length > 5 && <span className="text-[8px] font-bold text-slate-400">+{dayTasks.length - 5}</span>}
+                              </div>
+                            </div>
+                          )}
+
+                          {isOverloaded && (
+                            <div className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shadow-sm" title="Overload Alert: Too many tasks!">
+                              <ShieldAlert className="w-3 h-3" />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-4 pt-4 border-t border-slate-200/60 text-xs font-bold text-[#646477]">
+                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-sky-400" /> Regular Task</div>
+                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500" /> Active Recall (Spaced)</div>
+                    <div className="flex items-center gap-1.5"><ShieldAlert className="w-3.5 h-3.5 text-rose-500" /> Overload Alert (8+ Tasks)</div>
+                  </div>
+                </motion.div>
+              ) : null}
             </AnimatePresence>
           </div>
 
@@ -639,7 +738,6 @@ const [todayStr, setTodayStr] = useState('');
                 </button>
               </div>
 
-              {/* NEW: বর্তমানে কোন কাজটা করা হচ্ছে তা দেখাবে */}
               {focusingTask && (
                 <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 mb-5 text-sm font-extrabold text-indigo-700 shadow-inner">
                   🎯 {focusingTask.title}
@@ -663,12 +761,9 @@ const [todayStr, setTodayStr] = useState('');
               </div>
 
               <div className="flex justify-center gap-3 relative z-10">
-                {/* NEW: Advanced Pause Button (Max 1 Pause) */}
                 <button onClick={handlePauseToggle} className="w-12 h-12 rounded-full bg-white/80 hover:bg-white border border-white flex items-center justify-center text-[#a18cd1] shadow-sm transition-all hover:scale-105">
                   {isRunning ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
                 </button>
-                
-                {/* Emergency Reset Button */}
                 <button 
                   onClick={() => { setIsRunning(false); setTimeLeft(totalTime); setFocusingTask(null); setPauseCount(0); }} 
                   className="w-12 h-12 rounded-full bg-rose-50 hover:bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-500 shadow-sm hover:scale-105 transition-all"
@@ -735,7 +830,7 @@ const [todayStr, setTodayStr] = useState('');
           </motion.div>
         )}
       </AnimatePresence>
-      {/* Ghost Protocol Modal (Active Retrieval Engine) */}
+
       <AnimatePresence>
         {showGhostModal && (
           <motion.div
@@ -762,7 +857,6 @@ const [todayStr, setTodayStr] = useState('');
               </div>
 
               {!ghostQuestionsData ? (
-                // Phase 1: Free Recall (Brain Dump)
                 <div className="space-y-4">
                   <p className="text-sm text-[#646477] font-medium">
                     গত ২৫ মিনিটে তুমি কী কী শিখেছ বা কাজ করেছ? না দেখে নিজের ভাষায় নিচে লেখো। (ভুল হলে সমস্যা নেই!)
@@ -778,7 +872,7 @@ const [todayStr, setTodayStr] = useState('');
                     <button
                       onClick={() => {
                         setShowGhostModal(false);
-                        clearGhostData(); // NEW: স্কিপ করলে ডেটা ক্লিয়ার হবে
+                        clearGhostData(); 
                         setGhostInputText('');
                         setGhostAnswerText('');
                       }}
@@ -800,7 +894,6 @@ const [todayStr, setTodayStr] = useState('');
                   </div>
                 </div>
               ) : (
-                // Phase 2: AI Elaborative Interrogation & Feedback
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
                   <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl">
                     <p className="text-xs font-bold text-emerald-700 m-0">
@@ -840,7 +933,6 @@ const [todayStr, setTodayStr] = useState('');
                       </button>
                     </>
                   ) : (
-                    // Phase 3: AI Feedback & Claim Points
                     <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="mt-4 space-y-4">
                       <div className={`p-4 rounded-2xl border ${ghostFeedbackData.isCorrect ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
                         <h4 className={`text-sm font-extrabold mb-1 flex items-center gap-2 ${ghostFeedbackData.isCorrect ? 'text-emerald-700' : 'text-amber-700'}`}>
